@@ -58,6 +58,83 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 tg_app = Application.builder().token(BOT_TOKEN).build()
 
+# ============= TELEGRAM BOT HANDLERS =============
+
+# ============= NEW: SETTINGS MENU FUNCTIONS =============
+async def show_settings_menu(query, context):
+    """Replicates the exact Settings Menu from your screenshot"""
+    global current_threads
+    
+    settings_text = f"""
+<b>Settings Menu</b>
+
+Configure your bot preferences below:
+
+🧵 <b>Threads</b>: Control scan speed
+Current: <b>{current_threads} threads</b>
+
+🔌 <b>API Mode</b>: Select scanning method
+Current: <b>Crunchyroll</b>
+    """.strip()
+    
+    keyboard = [
+        [InlineKeyboardButton("🧵 Set Threads", callback_data="set_threads")],
+        [InlineKeyboardButton("🔌 API Mode", callback_data="set_api_mode")],
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        settings_text,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+async def handle_set_threads(query, context):
+    """Replicates the exact Set Thread Count screen from your screenshot"""
+    global current_threads
+    # Owner is always VIP
+    plan = "VIP"
+    
+    text = f"""
+<b>Set Thread Count</b>
+
+Limits by plan:
+🆓 FREE: 1-10
+⭐ BASIC: 1-75
+👑 VIP: 1-125
+
+Your plan <b>{plan}</b> allows 1-125 threads.
+
+Current threads: <b>{current_threads}</b>
+
+Send a number between 1 and 125 to set your thread count.
+    """.strip()
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="menu_settings")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
+    
+    # Enable waiting state (reuses your existing threads_command logic)
+    context.user_data['waiting_for_threads'] = True
+
+async def handle_api_mode(query, context):
+    """Placeholder for API Mode (you can expand later without touching checker)"""
+    text = f"""
+<b>API Mode</b>
+
+Current scanning method: <b>Crunchyroll</b> ✅
+
+Other modes (Netflix, etc.) coming soon...
+    """.strip()
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="menu_settings")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
+
 def format_single_result(result):
     """Returns nicely formatted HTML for single account check"""
     if result['success']:
@@ -260,8 +337,8 @@ async def start(update: Update, context: CallbackContext):
             InlineKeyboardButton("💎 Membership", callback_data="menu_membership")
         ],
         [
-            InlineKeyboardButton("📞 Support", callback_data="menu_rewards"),
-            InlineKeyboardButton("⚙️ Settings   ", callback_data="menu_membership")
+            InlineKeyboardButton("📞 Support", callback_data="menu_support"),
+            InlineKeyboardButton("⚙️ Settings   ", callback_data="menu_settings")
         ]
     ]
 
@@ -342,11 +419,39 @@ This bot is free to use!
 """
     await update.message.reply_text(about_text)
 
+# ============= NEW: THREAD INPUT HANDLER (reuses your logic) =============
+async def process_thread_count_input(update: Update, context: CallbackContext):
+    """Handles number input after clicking 'Set Threads' (exact match to your screenshot)"""
+    global current_threads
+    text = update.message.text.strip()
+    
+    try:
+        new_threads = int(text)
+        if 1 <= new_threads <= MAX_THREADS:
+            current_threads = new_threads
+            await update.message.reply_text(
+                f"✅ <b>Thread count updated to {current_threads} for your account.</b>",
+                parse_mode='HTML'
+            )
+            # Clear state
+            context.user_data['waiting_for_threads'] = False
+        else:
+            await update.message.reply_text(f"❌ Please send a number between 1 and {MAX_THREADS}.")
+    except ValueError:
+        await update.message.reply_text("❌ Invalid number! Send a number only.")
+
 async def handle_message(update: Update, context: CallbackContext):
     if not is_owner(update):
         return
+    
     text = update.message.text.strip()
     
+    # === NEW: Check if user is in thread settings mode (from Settings menu) ===
+    if context.user_data.get('waiting_for_threads'):
+        await process_thread_count_input(update, context)
+        return  # Important: skip normal combo check
+    
+    # Original message handling (unchanged)
     if ':' in text and '@' in text:
         parts = text.split(':', 1)
         email = parts[0].strip()
@@ -479,23 +584,45 @@ async def button_callback(update: Update, context: CallbackContext):
         await query.edit_message_text("❌ Access Denied.")
         return
 
-    if query.data == "menu_stats":
+    data = query.data
+
+    if data == "menu_stats":
         text = "<b>📊 My Stats</b>\n\nBot is running smoothly.\nTotal checks today: 0\nHits found: 0"
+        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
     
-    elif query.data == "menu_referrals":
+    elif data == "menu_referrals":
         text = "<b>🔗 My Referrals</b>\n\nYour referral link:\n<code>https://t.me/yourbot?start=ref123</code>\n\nReferrals: 0"
+        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
     
-    elif query.data == "menu_rewards":
+    elif data == "menu_rewards":
         text = "<b>🎁 Rewards & Gifts</b>\n\nNo rewards available yet.\nKeep using the bot to earn!"
+        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
     
-    elif query.data == "menu_membership":
+    elif data == "menu_membership":
         text = "<b>💎 Membership</b>\n\nCurrent Plan: <b>VIP</b>\nExpiry: Lifetime"
+        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
+    
+    elif data == "menu_settings":
+        await show_settings_menu(query, context)
+    
+    elif data == "set_threads":
+        await handle_set_threads(query, context)
+    
+    elif data == "set_api_mode":
+        await handle_api_mode(query, context)
+    
+    elif data == "back_to_main":
+        # Return to main dashboard
+        await query.message.delete()
+        await start(update, context)  # Re-send clean start menu
+    
+    elif data == "menu_support":
+        text = "<b>📞 Support</b>\n\nContact @proboy_23 for any issues."
+        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
     
     else:
         text = "Unknown option"
-
-    # Edit the same message
-    await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
+        await query.edit_message_text(text, parse_mode='HTML')
 
 # Register handlers
 tg_app.add_handler(CommandHandler("start", start))
@@ -506,6 +633,7 @@ tg_app.add_handler(CommandHandler("threads", threads_command))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 tg_app.add_handler(CallbackQueryHandler(button_callback))
+
 # ============== WEBHOOK ENDPOINT ==============
 @app.post("/webhook")
 async def webhook(request: Request):
