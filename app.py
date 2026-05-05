@@ -135,7 +135,6 @@ async def show_statistics_menu(query, context):
 ✨ <b>Daily Reward Lines (Active):</b> {stats['daily_reward_lines']}
 👥 <b>Referral Bonus Lines:</b> +{stats['referral_bonus_lines']}
 📦 <b>Base Plan Limit:</b> {stats['base_plan_limit']}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
