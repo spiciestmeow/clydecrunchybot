@@ -10,6 +10,8 @@ from datetime import datetime
 import asyncio
 from functools import partial
 from contextlib import asynccontextmanager
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import CallbackQueryHandler
 
 # ============= CONFIGURATION =============
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -248,6 +250,19 @@ async def start(update: Update, context: CallbackContext):
             )
             return
     
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 My Stats", callback_data="menu_stats"),
+            InlineKeyboardButton("🔗 My Referrals", callback_data="menu_referrals")
+        ],
+        [
+            InlineKeyboardButton("🎁 Rewards & Gifts", callback_data="menu_rewards"),
+            InlineKeyboardButton("💎 Membership", callback_data="menu_membership")
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     welcome = f"""
 <b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗥𝗨𝗡𝗖𝗛𝗬𝗥𝗢𝗟𝗟 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -448,6 +463,32 @@ async def handle_document(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
 
+async def button_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()  # Remove loading animation
+
+    if not is_owner(query.message):
+        await query.edit_message_text("❌ Access Denied.")
+        return
+
+    if query.data == "menu_stats":
+        text = "<b>📊 My Stats</b>\n\nBot is running smoothly.\nTotal checks today: 0\nHits found: 0"
+    
+    elif query.data == "menu_referrals":
+        text = "<b>🔗 My Referrals</b>\n\nYour referral link:\n<code>https://t.me/yourbot?start=ref123</code>\n\nReferrals: 0"
+    
+    elif query.data == "menu_rewards":
+        text = "<b>🎁 Rewards & Gifts</b>\n\nNo rewards available yet.\nKeep using the bot to earn!"
+    
+    elif query.data == "menu_membership":
+        text = "<b>💎 Membership</b>\n\nCurrent Plan: <b>VIP</b>\nExpiry: Lifetime"
+    
+    else:
+        text = "Unknown option"
+
+    # Edit the same message
+    await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
+
 # Register handlers
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("help", help_command))
@@ -456,7 +497,7 @@ tg_app.add_handler(CommandHandler("about", about_command))
 tg_app.add_handler(CommandHandler("threads", threads_command))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-
+tg_app.add_handler(CallbackQueryHandler(button_callback))
 # ============== WEBHOOK ENDPOINT ==============
 @app.post("/webhook")
 async def webhook(request: Request):
