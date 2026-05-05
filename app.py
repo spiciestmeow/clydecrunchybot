@@ -6,21 +6,28 @@ import time
 import uuid
 import requests
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, date
 import asyncio
 from functools import partial
 from contextlib import asynccontextmanager
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
+from supabase import create_client, Client
 
 # ============= CONFIGURATION =============
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 7399488750))
 CHANNEL_USERNAME = "@caysredirect"
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+
 TIMEOUT = 30
 MAX_THREADS = 125
 current_threads = MAX_THREADS
+
+# ============= SUPABASE CLIENT =============
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ============= OWNER RESTRICTION =============
 def is_owner(update: Update):
@@ -58,8 +65,83 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 tg_app = Application.builder().token(BOT_TOKEN).build()
 
+# ============= GET / UPDATE USER STATS =============
+def get_user_stats():
+    response = supabase.table("user_stats").select("*").eq("user_id", ADMIN_ID).execute()
+    if response.data:
+        return response.data[0]
+    # Create default if not exists
+    default = {
+        "user_id": ADMIN_ID,
+        "registered": str(date.today()),
+        "plan": "VIP",
+        "expires": "N/A",
+        "mode": "Crunchyroll",
+        "total_scans": 0,
+        "total_hits": 0,
+        "total_free": 0,
+        "today_date": str(date.today()),
+        "today_scans": 0,
+        "referrals": 0,
+        "daily_reward_claimed": True,
+        "daily_reward_lines": 570,
+        "referral_bonus_lines": 0,
+        "base_plan_limit": 5000
+    }
+    supabase.table("user_stats").insert(default).execute()
+    return default
+
+
 # ============= TELEGRAM BOT HANDLERS =============
-# ============= NEW: SETTINGS MENU FUNCTIONS =============
+def update_user_stats(data: dict):
+    supabase.table("user_stats").update(data).eq("user_id", ADMIN_ID).execute()
+
+# ============= STATISTICS MENU (Exact match to your screenshot) =============
+async def show_statistics_menu(query, context):
+    stats = get_user_stats()
+    
+    # Auto reset daily stats if new day
+    if stats["today_date"] != str(date.today()):
+        update_user_stats({"today_scans": 0, "today_date": str(date.today())})
+        stats = get_user_stats()  # Refresh after reset
+
+    success_rate = round((stats["total_hits"] / stats["total_scans"] * 100), 2) if stats["total_scans"] > 0 else 0.0
+
+    text = f"""
+📊 <b>Your Statistics</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👤 <b>User ID:</b> <code>{stats['user_id']}</code>
+📅 <b>Registered:</b> {stats['registered']}
+👑 <b>Plan:</b> {stats['plan']}
+📆 <b>Expires:</b> {stats['expires']}
+🔴 <b>Mode:</b> {stats['mode']}
+🧵 <b>Threads:</b> <b>{current_threads} / {MAX_THREADS}</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📈 <b>General Statistics:</b>
+✅ <b>Total Scans:</b> {stats['total_scans']}
+🎯 <b>Total Hits:</b> {stats['total_hits']}
+🆓 <b>Total FREE:</b> {stats['total_free']}
+📊 <b>Success Rate:</b> {success_rate}%
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 <b>Today's Statistics:</b>
+🔥 <b>Scans Used:</b> {stats['today_scans']}
+⏳ <b>Remaining:</b> ♾️ / ♾️
+👥 <b>Referrals:</b> {stats['referrals']}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎁 <b>Rewards & Limits Details:</b>
+🎟️ <b>Claimed Codes:</b> 0
+✅ <b>Daily Reward Claimed Today:</b> {'Yes' if stats['daily_reward_claimed'] else 'No'}
+⭐ <b>Daily Reward Lines (Active):</b> {stats['daily_reward_lines']}
+🔗 <b>Referral Bonus Lines:</b> +{stats['referral_bonus_lines']}
+📌 <b>Base Plan Limit:</b> {stats['base_plan_limit']}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    """.strip()
+
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
+
 async def show_settings_menu(query, context):
     """Replicates the exact Settings Menu from your screenshot"""
     global current_threads
@@ -291,7 +373,6 @@ def check_crunchyroll(email, password, proxy=None):
     
     return result
 
-# ============= TELEGRAM BOT HANDLERS =============
 async def start(update: Update, context: CallbackContext):
     if not is_owner(update):
         await update.message.reply_text("❌ This bot is private.", parse_mode='HTML')
@@ -389,7 +470,6 @@ This bot is free to use!
 """
     await update.message.reply_text(about_text)
 
-# ============= NEW: THREAD INPUT HANDLER =============
 async def process_thread_count_input(update: Update, context: CallbackContext):
     """Handles number input after clicking 'Set Threads' + auto redirect to main menu"""
     global current_threads
@@ -513,11 +593,22 @@ async def handle_document(update: Update, context: CallbackContext):
                 except:
                     pass
     
+    # ====================== UPDATE SUPABASE STATS ======================
+    hits_count = len(hits)
+    bad_count = total - hits_count
+    
+    # Get current stats and update
+    current_stats = get_user_stats()
+    
+    update_user_stats({
+        "total_scans": current_stats["total_scans"] + total,
+        "total_hits": current_stats["total_hits"] + hits_count,
+        "today_scans": current_stats["today_scans"] + total
+    })
+    
     # ====================== SUMMARY ======================
     elapsed = int(time.time() - start_time)
     cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
-    hits_count = len(hits)
-    bad_count = total - hits_count
     
     summary = f"""
 <b>📊 Scan Completed ✅</b>
@@ -542,7 +633,6 @@ async def handle_document(update: Update, context: CallbackContext):
         for hit in hits:
             hits_text += f"{hit['email']}:{hit['password']} | {hit['plan']} | {hit['expiry']} | {hit['country']}\n"
         
-        # Use /tmp/ folder (important for Vercel)
         hits_file = f"/tmp/crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
         
         with open(hits_file, "w", encoding="utf-8") as f:
@@ -604,9 +694,8 @@ async def edit_to_main_menu(update_or_query, context):
 
 async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()  # Remove loading animation
+    await query.answer()
 
-    # FIXED: Use update instead of query.message
     if not is_owner(update):
         await query.edit_message_text("❌ Access Denied.")
         return
@@ -614,8 +703,7 @@ async def button_callback(update: Update, context: CallbackContext):
     data = query.data
 
     if data == "menu_stats":
-        text = "<b>📊 My Stats</b>\n\nBot is running smoothly.\nTotal checks today: 0\nHits found: 0"
-        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
+            await show_statistics_menu(query, context)
     
     elif data == "menu_referrals":
         text = "<b>🔗 My Referrals</b>\n\nYour referral link:\n<code>https://t.me/yourbot?start=ref123</code>\n\nReferrals: 0"
@@ -642,12 +730,13 @@ async def button_callback(update: Update, context: CallbackContext):
         await edit_to_main_menu(update, context)   # ← Fixed
     
     elif data == "menu_support":
-        text = "<b>📞 Support</b>\n\nContact @proboy_23 for any issues."
+        text = "<b>📞 Support & Contact</b>\n\nContact @caydigitals for any issues."
         await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
     
     else:
         text = "Unknown option"
         await query.edit_message_text(text, parse_mode='HTML')
+
 # Register handlers
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("help", help_command))
