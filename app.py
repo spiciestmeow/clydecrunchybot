@@ -66,8 +66,8 @@ async def show_settings_menu(query, context):
     global current_threads
     
     settings_text = f"""
-<b>Settings Menu</b>
-
+⚙️ <b>Settings Menu</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Configure your bot preferences below:
 
 🧵 <b>Threads</b>: Control scan speed
@@ -75,11 +75,15 @@ Current: <b>{current_threads} threads</b>
 
 🔌 <b>API Mode</b>: Select scanning method
 Current: <b>Crunchyroll</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<i>Click a button to configure:</i>
     """.strip()
     
     keyboard = [
-        [InlineKeyboardButton("🧵 Set Threads", callback_data="set_threads")],
-        [InlineKeyboardButton("🔌 API Mode", callback_data="set_api_mode")],
+        [
+            InlineKeyboardButton("🧵 Set Threads", callback_data="set_threads"),
+            InlineKeyboardButton("🔌 API Mode", callback_data="set_api_mode"),
+        ],
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
     ]
     
