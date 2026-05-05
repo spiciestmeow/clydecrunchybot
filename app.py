@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
 from supabase import create_client, Client
+from datetime import datetime, date, timedelta
 
 # ============= CONFIGURATION =============
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -46,6 +47,28 @@ PLAN_CONFIG = {
         "max_threads": 125,
         "multi_scan_max_files": 5,
         "queue_waiting": False
+    }
+}
+
+# ============= PLAN DEFAULTS FOR /setplan COMMAND =============
+PLAN_DEFAULTS = {
+    "FREE": {
+        "plan": "FREE",
+        "base_plan_limit": 5000,
+        "threads": 10,
+        "expires": "N/A"
+    },
+    "BASIC": {
+        "plan": "BASIC",
+        "base_plan_limit": 25000,
+        "threads": 75,
+        "expires": (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+    },
+    "VIP": {
+        "plan": "VIP",
+        "base_plan_limit": 999999,   # practically unlimited
+        "threads": 125,
+        "expires": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
     }
 }
 
@@ -164,6 +187,18 @@ def update_user_stats(data: dict):
     data["updated_at"] = datetime.now().isoformat()
     supabase.table("user_stats").update(data).eq("user_id", ADMIN_ID).execute()
 
+def update_user_stats_general(user_id: int, data: dict):
+    """Update any user (used by admin commands)"""
+    data["updated_at"] = datetime.now().isoformat()
+    response = supabase.table("user_stats").update(data).eq("user_id", user_id).execute()
+    return len(response.data) > 0  # True if row was updated
+
+def update_user_stats_general(user_id: int, data: dict):
+    """Update any user by user_id (used by admin commands)"""
+    data["updated_at"] = datetime.now().isoformat()
+    response = supabase.table("user_stats").update(data).eq("user_id", user_id).execute()
+    return len(response.data) > 0
+
 # ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
 async def show_membership_menu(query, context):
     stats = get_user_stats()
@@ -259,6 +294,81 @@ async def show_statistics_menu(query, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
+
+async def set_plan_command(update: Update, context: CallbackContext):
+    if not is_owner(update):
+        await update.message.reply_text("❌ This command is only for the owner.")
+        return
+
+    args = context.args
+    if not args:
+        await update.message.reply_text(
+            "📋 <b>Usage:</b>\n\n"
+            "<code>/setplan VIP</code> → update yourself\n"
+            "<code>/setplan 1234567890 VIP</code> → update by user ID\n"
+            "<code>/setplan @username VIP</code> → update by username\n\n"
+            "Available plans: FREE, BASIC, VIP",
+            parse_mode='HTML'
+        )
+        return
+
+    # Determine target and plan
+    if len(args) == 1:
+        # /setplan VIP  → self
+        target_user_id = ADMIN_ID
+        new_plan = args[0].strip().upper()
+    elif len(args) == 2:
+        target = args[0].strip()
+        new_plan = args[1].strip().upper()
+
+        if target.startswith('@'):
+            # By username
+            username = target[1:]  # remove @
+            response = supabase.table("user_stats").select("user_id").eq("username", username).execute()
+            if not response.data:
+                await update.message.reply_text(f"❌ User with username @{username} not found.")
+                return
+            target_user_id = response.data[0]["user_id"]
+        else:
+            # By user_id
+            try:
+                target_user_id = int(target)
+            except ValueError:
+                await update.message.reply_text("❌ Invalid user ID or username format.")
+                return
+    else:
+        await update.message.reply_text("❌ Wrong usage. Check /setplan for help.")
+        return
+
+    if new_plan not in PLAN_DEFAULTS:
+        await update.message.reply_text("❌ Invalid plan! Use: FREE, BASIC, or VIP")
+        return
+
+    defaults = PLAN_DEFAULTS[new_plan]
+
+    update_data = {
+        "plan": defaults["plan"],
+        "base_plan_limit": defaults["base_plan_limit"],
+        "threads": defaults["threads"],
+        "expires": defaults["expires"],
+        "daily_reward_lines": 0,
+        "referral_bonus_lines": 0
+    }
+
+    success = update_user_stats_general(target_user_id, update_data)
+
+    if success:
+        await update.message.reply_text(
+            f"✅ <b>Plan updated successfully!</b>\n\n"
+            f"👤 Target User: <code>{target_user_id}</code>\n"
+            f"📌 New Plan: <b>{new_plan}</b>\n"
+            f"🧵 Threads: <b>{defaults['threads']}</b>\n"
+            f"📆 Expires: <b>{defaults['expires']}</b>\n\n"
+            f"Changes are live immediately.",
+            parse_mode='HTML'
+        )
+    else:
+        await update.message.reply_text("❌ Failed to update user. Make sure the user has used the bot before.")
 
 async def show_settings_menu(query, context):
     """Replicates the exact Settings Menu"""
@@ -863,6 +973,7 @@ async def button_callback(update: Update, context: CallbackContext):
 
 # Register handlers
 tg_app.add_handler(CommandHandler("start", start))
+tg_app.add_handler(CommandHandler("setplan", set_plan_command))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 tg_app.add_handler(CallbackQueryHandler(button_callback))
