@@ -258,6 +258,10 @@ async def start(update: Update, context: CallbackContext):
         [
             InlineKeyboardButton("🎁 Rewards & Gifts", callback_data="menu_rewards"),
             InlineKeyboardButton("💎 Membership", callback_data="menu_membership")
+        ],
+        [
+            InlineKeyboardButton("📞 Support", callback_data="menu_rewards"),
+            InlineKeyboardButton("⚙️ Settings   ", callback_data="menu_membership")
         ]
     ]
 
