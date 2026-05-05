@@ -86,11 +86,13 @@ def get_plan_limits(stats: dict):
     if base_limit is None:  # VIP = unlimited
         daily_limit = None
         remaining_text = "♾️"
+        base_limit_text = "♾️"
     else:
         daily_limit = base_limit + bonus_lines
         today_used = stats.get("today_scans", 0)
         remaining = max(0, daily_limit - today_used)
         remaining_text = f"{remaining} / {daily_limit}"
+        base_limit_text = f"{base_limit:,}"   # e.g. 5,000 or 25,000
     
     return {
         "display_name": config["display_name"],
@@ -99,7 +101,8 @@ def get_plan_limits(stats: dict):
         "multi_scan_max_files": config["multi_scan_max_files"],
         "queue_waiting": config["queue_waiting"],
         "remaining_text": remaining_text,
-        "current_threads": stats.get("threads", 10)
+        "current_threads": stats.get("threads", 10),
+        "base_limit_text": base_limit_text
     }
 
 # ============= SUPABASE CLIENT =============
@@ -321,7 +324,7 @@ async def show_statistics_menu(query, context):
 🎁 <b>Daily Reward Claimed Today:</b> {'Yes' if stats['daily_reward_claimed'] else 'No'}
 ✨ <b>Daily Reward Lines (Active):</b> {stats['daily_reward_lines']}
 👥 <b>Referral Bonus Lines:</b> +{stats['referral_bonus_lines']}
-📦 <b>Base Plan Limit:</b> {stats['base_plan_limit']}
+📦 <b>Base Plan Limit:</b> {stats['base_limit_text']}
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
