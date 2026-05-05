@@ -687,6 +687,8 @@ async def start(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
+    context.user_data['in_main_menu'] = True
+
 async def process_thread_count_input(update: Update, context: CallbackContext):
     """Handles number input after clicking 'Set Threads'"""
     text = update.message.text.strip()
@@ -736,49 +738,53 @@ async def handle_message(update: Update, context: CallbackContext):
     
     text = update.message.text.strip()
     
+    # Priority: Waiting for thread count input
     if context.user_data.get('waiting_for_threads'):
         await process_thread_count_input(update, context)
         return
     
-    if ':' in text and '@' in text:
-        parts = text.split(':', 1)
-        email = parts[0].strip()
-        password = parts[1].strip()
-        
-        stats = get_user_stats()
-        reset_daily_if_needed(stats)           # ← NEW: Force reset
-        stats = get_user_stats()               # Refresh after possible reset
-        limits = get_plan_limits(stats)
-        
-        if limits["daily_limit"] is not None:
-            if stats["today_scans"] + 1 > limits["daily_limit"]:
-                await update.message.reply_text(
-                    f"❌ Daily limit reached!\n"
-                    f"You have already used {stats['today_scans']}/{limits['daily_limit']} scans today.\n"
-                    f"Upgrade your plan or wait until tomorrow.",
-                    parse_mode='HTML'
-                )
-                return
-        
-        status_msg = await update.message.reply_text(
-            f"🔍 Checking <code>{email}</code>...\nPlease wait...", 
-            parse_mode='HTML'
-        )
-        
-        result = await run_blocking(check_crunchyroll, email, password)
-        
-        response = format_single_result(result)
-        await status_msg.edit_text(response, parse_mode='HTML')
-        
-        hits_increment = 1 if result['success'] else 0
-        
-        update_user_stats({
-            "total_scans": stats["total_scans"] + 1,
-            "total_hits": stats["total_hits"] + hits_increment,
-            "today_scans": stats["today_scans"] + 1
-        })
-        
+    # 🔥 NEW: Only trigger single checker when on the main dashboard
+    if context.user_data.get('in_main_menu', False):
+        if ':' in text and '@' in text:
+            parts = text.split(':', 1)
+            email = parts[0].strip()
+            password = parts[1].strip()
+            
+            stats = get_user_stats()
+            reset_daily_if_needed(stats)
+            stats = get_user_stats()
+            limits = get_plan_limits(stats)
+            
+            if limits["daily_limit"] is not None:
+                if stats["today_scans"] + 1 > limits["daily_limit"]:
+                    await update.message.reply_text(
+                        f"❌ Daily limit reached!\n"
+                        f"You have already used {stats['today_scans']}/{limits['daily_limit']} scans today.\n"
+                        f"Upgrade your plan or wait until tomorrow.",
+                        parse_mode='HTML'
+                    )
+                    return
+            
+            status_msg = await update.message.reply_text(
+                f"🔍 Checking <code>{email}</code>...\nPlease wait...", 
+                parse_mode='HTML'
+            )
+            
+            result = await run_blocking(check_crunchyroll, email, password)
+            
+            response = format_single_result(result)
+            await status_msg.edit_text(response, parse_mode='HTML')
+            
+            hits_increment = 1 if result['success'] else 0
+            
+            update_user_stats({
+                "total_scans": stats["total_scans"] + 1,
+                "total_hits": stats["total_hits"] + hits_increment,
+                "today_scans": stats["today_scans"] + 1
+            })
+            
     else:
+
         await update.message.reply_text(
             """❌ <b>Invalid Format!</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -925,6 +931,7 @@ async def handle_document(update: Update, context: CallbackContext):
 
 async def edit_to_main_menu(update_or_query, context):
     """Smart function that works for BOTH callback buttons and normal messages"""
+    context.user_data['in_main_menu'] = True
     # ←←← IMPORTANT: Clear waiting state when returning to main menu
     if 'waiting_for_threads' in context.user_data:
         context.user_data['waiting_for_threads'] = False
@@ -982,32 +989,40 @@ async def button_callback(update: Update, context: CallbackContext):
     data = query.data
 
     if data == "menu_stats":
+            context.user_data['in_main_menu'] = False
             await show_statistics_menu(query, context)
     
     elif data == "menu_referrals":
+        context.user_data['in_main_menu'] = False
         text = "<b>🔗 My Referrals</b>\n\nYour referral link:\n<code>https://t.me/yourbot?start=ref123</code>\n\nReferrals: 0"
         await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
     
     elif data == "menu_rewards":
+        context.user_data['in_main_menu'] = False
         text = "<b>🎁 Rewards & Gifts</b>\n\nNo rewards available yet.\nKeep using the bot to earn!"
         await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
     
     elif data == "menu_membership":
+        context.user_data['in_main_menu'] = False
         await show_membership_menu(query, context)
     
     elif data == "menu_settings":
+        context.user_data['in_main_menu'] = False
         await show_settings_menu(query, context)
     
     elif data == "set_threads":
+        context.user_data['in_main_menu'] = False
         await handle_set_threads(query, context)
     
     elif data == "set_api_mode":
+        context.user_data['in_main_menu'] = False
         await handle_api_mode(query, context)
     
     elif data == "back_to_main":
         await edit_to_main_menu(update, context)
     
     elif data == "menu_support":
+        context.user_data['in_main_menu'] = False
         await show_support_menu(query, context)
     
     else:
