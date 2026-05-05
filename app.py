@@ -242,7 +242,11 @@ async def threads_command(update: Update, context: CallbackContext):
 
 async def start(update: Update, context: CallbackContext):
     if not is_owner(update):
-        return
+            await update.message.reply_text(
+                "❌ This bot is private.",
+                parse_mode='HTML'
+            )
+            return
     
     welcome = f"""
 <b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗥𝗨𝗡𝗖𝗛𝗬𝗥𝗢𝗟𝗟 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
@@ -472,7 +476,10 @@ async def webhook(request: Request):
 # Optional: Health check
 @app.get("/webhook")
 async def webhook_get():
-    return {"status": "Webhook is active. Use POST only."}
+    return {
+        "status": "✅ Webhook is Active",
+        "info": "Telegram uses POST requests only. This is normal."
+    }
 
 if __name__ == "__main__":
     import uvicorn
