@@ -115,6 +115,7 @@ async def show_statistics_menu(query, context):
 👑 <b>Plan:</b> {stats['plan']}
 📆 <b>Expires:</b> {stats['expires']}
 🔴 <b>Mode:</b> {stats['mode']}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <b>{current_threads} / {MAX_THREADS}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
