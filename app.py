@@ -85,7 +85,7 @@ def get_plan_limits(stats: dict):
     
     if base_limit is None:  # VIP = unlimited
         daily_limit = None
-        remaining_text = "♾️ / ♾️"
+        remaining_text = "♾️"
     else:
         daily_limit = base_limit + bonus_lines
         today_used = stats.get("today_scans", 0)
@@ -187,27 +187,61 @@ def update_user_stats(data: dict):
     data["updated_at"] = datetime.now().isoformat()
     supabase.table("user_stats").update(data).eq("user_id", ADMIN_ID).execute()
 
+def reset_daily_if_needed(stats: dict):
+    """Automatically reset daily scans if it's a new day"""
+    if stats.get("today_date") != str(date.today()):
+        update_user_stats({
+            "today_scans": 0,
+            "today_date": str(date.today())
+        })
+        return True  # reset happened
+    return False
+
 def update_user_stats_general(user_id: int, data: dict):
     """Update any user (used by admin commands)"""
     data["updated_at"] = datetime.now().isoformat()
     response = supabase.table("user_stats").update(data).eq("user_id", user_id).execute()
     return len(response.data) > 0  # True if row was updated
 
-def update_user_stats_general(user_id: int, data: dict):
-    """Update any user by user_id (used by admin commands)"""
-    data["updated_at"] = datetime.now().isoformat()
-    response = supabase.table("user_stats").update(data).eq("user_id", user_id).execute()
-    return len(response.data) > 0
+async def show_support_menu(query, context):
+    """Replicates the exact Support & Contact page from your screenshot"""
+    
+    text = f"""
+📞 <b>Support & Contact</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Need help or want to upgrade?
+
+— Contact: <b>@caydigitals</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+<a href="https://t.me/caydigitals"><b>Telegram</b></a>
+Cay
+Main Channel: https://t.me/+MfJaSNxdX5pjNzE9
+    """.strip()
+
+    # Inline button that opens direct chat with @caydigitals
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        text, 
+        parse_mode='HTML', 
+        reply_markup=reply_markup,
+        disable_web_page_preview=True
+    )
 
 # ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
 async def show_membership_menu(query, context):
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     
-    current_plan_text = f"✅ Your Current Plan: <b>{limits['display_name']}</b>"
+    current_plan_text = f"📌 Your Current Plan: <b>{limits['display_name']}</b>"
     
     text = f"""
-🔥 <b>MEMBERSHIP PLANS</b>
+👑 <b>MEMBERSHIP PLANS</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🆓 <b>FREE PLAN</b>
 • Daily Limit: 5,000 lines
@@ -610,6 +644,9 @@ async def start(update: Update, context: CallbackContext):
         return
     
     stats = get_user_stats()
+    reset_daily_if_needed(stats)
+    stats = get_user_stats()
+
     limits = get_plan_limits(stats)
     
     keyboard = [
@@ -699,22 +736,21 @@ async def handle_message(update: Update, context: CallbackContext):
     
     text = update.message.text.strip()
     
-    # === Handle thread setting mode ===
     if context.user_data.get('waiting_for_threads'):
         await process_thread_count_input(update, context)
         return
     
-    # === SINGLE ACCOUNT CHECK ===
     if ':' in text and '@' in text:
         parts = text.split(':', 1)
         email = parts[0].strip()
         password = parts[1].strip()
         
-        # Get current stats and check daily limit (same as bulk)
         stats = get_user_stats()
+        reset_daily_if_needed(stats)           # ← NEW: Force reset
+        stats = get_user_stats()               # Refresh after possible reset
         limits = get_plan_limits(stats)
         
-        if limits["daily_limit"] is not None:  # Not VIP
+        if limits["daily_limit"] is not None:
             if stats["today_scans"] + 1 > limits["daily_limit"]:
                 await update.message.reply_text(
                     f"❌ Daily limit reached!\n"
@@ -734,7 +770,6 @@ async def handle_message(update: Update, context: CallbackContext):
         response = format_single_result(result)
         await status_msg.edit_text(response, parse_mode='HTML')
         
-        # ====================== UPDATE STATS FOR SINGLE CHECK ======================
         hits_increment = 1 if result['success'] else 0
         
         update_user_stats({
@@ -780,8 +815,10 @@ async def handle_document(update: Update, context: CallbackContext):
 
     # === Get fresh limits from database (no global needed) ===
     stats = get_user_stats()
+    reset_daily_if_needed(stats)
+    stats = get_user_stats()
     limits = get_plan_limits(stats)
-    user_threads = limits["current_threads"]   # ← this is the new way
+    user_threads = limits["current_threads"]
 
     progress_msg = await update.message.reply_text(
         f"🚀 Starting bulk check with <b>{user_threads}</b> threads...\n"
@@ -915,7 +952,7 @@ async def edit_to_main_menu(update_or_query, context):
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <b>{stats['expires']}</b>
-📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
+📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
 📡 Mode: <code><b>Crunchyroll Check</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
@@ -961,11 +998,10 @@ async def button_callback(update: Update, context: CallbackContext):
         await handle_api_mode(query, context)
     
     elif data == "back_to_main":
-        await edit_to_main_menu(update, context)   # ← Fixed
+        await edit_to_main_menu(update, context)
     
     elif data == "menu_support":
-        text = "<b>📞 Support & Contact</b>\n\nContact @caydigitals for any issues."
-        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
+        await show_support_menu(query, context)
     
     else:
         text = "Unknown option"
