@@ -278,7 +278,11 @@ async def start(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
-    await update.message.reply_text(welcome, parse_mode='HTML')
+    await update.message.reply_text(
+        welcome,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
 
 async def help_command(update: Update, context: CallbackContext):
     if not is_owner(update):
