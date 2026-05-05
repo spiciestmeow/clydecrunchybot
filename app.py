@@ -23,8 +23,61 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 TIMEOUT = 30
-MAX_THREADS = 125
-current_threads = MAX_THREADS
+
+# ============= PLAN CONFIG (exactly from your screenshot) =============
+PLAN_CONFIG = {
+    "FREE": {
+        "display_name": "FREE",
+        "daily_limit": 5000,          # lines per day
+        "max_threads": 10,
+        "multi_scan_max_files": 1,
+        "queue_waiting": True
+    },
+    "BASIC": {
+        "display_name": "BASIC PLAN (WEEKLY)",
+        "daily_limit": 25000,
+        "max_threads": 75,
+        "multi_scan_max_files": 3,
+        "queue_waiting": False
+    },
+    "VIP": {
+        "display_name": "VIP PLAN (MONTHLY)",
+        "daily_limit": None,          # unlimited
+        "max_threads": 125,
+        "multi_scan_max_files": 5,
+        "queue_waiting": False
+    }
+}
+
+def get_plan_limits(stats: dict):
+    """Returns dynamic limits based on user's plan + bonuses"""
+    plan_key = stats.get("plan", "FREE").upper()
+    config = PLAN_CONFIG.get(plan_key, PLAN_CONFIG["FREE"])
+    
+    # Base daily limit from plan
+    base_limit = config["daily_limit"]
+    
+    # Add bonuses (daily reward + referral)
+    bonus_lines = stats.get("daily_reward_lines", 0) + stats.get("referral_bonus_lines", 0)
+    
+    if base_limit is None:  # VIP = unlimited
+        daily_limit = None
+        remaining_text = "♾️ / ♾️"
+    else:
+        daily_limit = base_limit + bonus_lines
+        today_used = stats.get("today_scans", 0)
+        remaining = max(0, daily_limit - today_used)
+        remaining_text = f"{remaining} / {daily_limit}"
+    
+    return {
+        "display_name": config["display_name"],
+        "daily_limit": daily_limit,
+        "max_threads": config["max_threads"],
+        "multi_scan_max_files": config["multi_scan_max_files"],
+        "queue_waiting": config["queue_waiting"],
+        "remaining_text": remaining_text,
+        "current_threads": stats.get("threads", 10)
+    }
 
 # ============= SUPABASE CLIENT =============
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -65,35 +118,50 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 tg_app = Application.builder().token(BOT_TOKEN).build()
 
-# ============= GET / UPDATE USER STATS =============
 def get_user_stats():
     response = supabase.table("user_stats").select("*").eq("user_id", ADMIN_ID).execute()
     if response.data:
-        return response.data[0]
-    # Create default if not exists
+        stats = response.data[0]
+        # Auto update last active
+        update_user_stats({"last_active": datetime.now().isoformat()})
+        return stats
+    
+    # First time user - create row
     default = {
         "user_id": ADMIN_ID,
+        "username": None,
+        "first_name": None,
         "registered": str(date.today()),
-        "plan": "VIP",
+        "last_active": datetime.now().isoformat(),
+        "plan": "FREE",                    # ← changed to FREE by default
         "expires": "N/A",
         "mode": "Crunchyroll",
+        "threads": 10,                     # FREE default
+        "api_mode": "Crunchyroll",
         "total_scans": 0,
         "total_hits": 0,
         "total_free": 0,
+        "total_combo_files": 0,
         "today_date": str(date.today()),
         "today_scans": 0,
         "referrals": 0,
-        "daily_reward_claimed": True,
-        "daily_reward_lines": 570,
+        "referral_code": None,
+        "referred_by": None,
+        "daily_reward_claimed": False,
+        "daily_reward_last_claimed": None,
+        "daily_reward_lines": 0,
         "referral_bonus_lines": 0,
-        "base_plan_limit": 5000
+        "base_plan_limit": 5000,
+        "is_banned": False,
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat()
     }
     supabase.table("user_stats").insert(default).execute()
     return default
 
-
 # ============= TELEGRAM BOT HANDLERS =============
 def update_user_stats(data: dict):
+    data["updated_at"] = datetime.now().isoformat()
     supabase.table("user_stats").update(data).eq("user_id", ADMIN_ID).execute()
 
 # ============= STATISTICS MENU (Exact match to your screenshot) =============
@@ -104,6 +172,8 @@ async def show_statistics_menu(query, context):
     if stats["today_date"] != str(date.today()):
         update_user_stats({"today_scans": 0, "today_date": str(date.today())})
         stats = get_user_stats()  # Refresh after reset
+    
+    limits = get_plan_limits(stats)   # ← MOVED OUTSIDE the if-block
 
     success_rate = round((stats["total_hits"] / stats["total_scans"] * 100), 2) if stats["total_scans"] > 0 else 0.0
 
@@ -116,7 +186,7 @@ async def show_statistics_menu(query, context):
 📆 <b>Expires:</b> {stats['expires']}
 📡 <b>Mode:</b> {stats['mode']}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🧵 <b>Threads:</b> <b>{current_threads} / {MAX_THREADS}</b>
+🧵 <b>Threads:</b> <b>{limits['current_threads']} / {limits['max_threads']}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ <b>Total Scans:</b> {stats['total_scans']}
@@ -126,7 +196,7 @@ async def show_statistics_menu(query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Today's Statistics:</b>
 📊 <b>Scans Used:</b> {stats['today_scans']}
-⏳ <b>Remaining:</b> ♾️ / ♾️
+⏳ <b>Remaining:</b> {limits['remaining_text']}
 👥 <b>Referrals:</b> {stats['referrals']}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 <b>Rewards & Limits Details:</b>
@@ -143,8 +213,8 @@ async def show_statistics_menu(query, context):
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
 
 async def show_settings_menu(query, context):
-    """Replicates the exact Settings Menu from your screenshot"""
-    global current_threads
+    stats = get_user_stats()
+    limits = get_plan_limits(stats)
     
     settings_text = f"""
 ⚙️ <b>Settings Menu</b>
@@ -152,7 +222,7 @@ async def show_settings_menu(query, context):
 Configure your bot preferences below:
 
 🧵 <b>Threads</b>: Control scan speed
-Current: <b>{current_threads} threads</b>
+Current: <b>{limits['current_threads']} threads</b> (Max: {limits['max_threads']})
 
 🔌 <b>API Mode</b>: Select scanning method
 Current: <b>Crunchyroll</b>
@@ -177,10 +247,10 @@ Current: <b>Crunchyroll</b>
     )
 
 async def handle_set_threads(query, context):
-    """Replicates the exact Set Thread Count screen from your screenshot"""
-    global current_threads
-    # Owner is always VIP
-    plan = "VIP"
+    stats = get_user_stats()
+    limits = get_plan_limits(stats)
+    plan = limits["display_name"]
+    max_t = limits["max_threads"]
     
     text = f"""
 <b>Set Thread Count</b>
@@ -190,19 +260,17 @@ Limits by plan:
 ⭐ BASIC: 1-75
 👑 VIP: 1-125
 
-Your plan <b>{plan}</b> allows 1-125 threads.
+Your plan <b>{plan}</b> allows 1-{max_t} threads.
 
-Current threads: <b>{current_threads}</b>
+Current threads: <b>{limits['current_threads']}</b>
 
-Send a number between 1 and 125 to set your thread count.
+Send a number between 1 and {max_t} to set your thread count.
     """.strip()
     
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="menu_settings")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
-    
-    # Enable waiting state (reuses your existing threads_command logic)
     context.user_data['waiting_for_threads'] = True
 
 async def handle_api_mode(query, context):
@@ -378,6 +446,9 @@ async def start(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ This bot is private.", parse_mode='HTML')
         return
     
+    stats = get_user_stats()
+    limits = get_plan_limits(stats)
+    
     keyboard = [
         [
             InlineKeyboardButton("📊 My Stats", callback_data="menu_stats"),
@@ -402,10 +473,10 @@ async def start(update: Update, context: CallbackContext):
 <i>Format: mail:pass (one per line)</i>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊<b>Your Dashboard:</b>
-🧵 Threads: <code><b>{current_threads}/{current_threads}</b></code>
-👑 Plan: <code><b>VIP</b></code>
-📅 Days Left: <b>-</b>
-📈 Daily Limit: <code><b>♾️</b></code>
+🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
+👑 Plan: <code><b>{limits['display_name']}</b></code>
+📅 Days Left: <b>{stats['expires']}</b>
+📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
 📡 Mode: <code><b>Crunchyroll Check</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
@@ -471,30 +542,36 @@ This bot is free to use!
     await update.message.reply_text(about_text)
 
 async def process_thread_count_input(update: Update, context: CallbackContext):
-    """Handles number input after clicking 'Set Threads' + auto redirect to main menu"""
-    global current_threads
+    """Handles number input after clicking 'Set Threads'"""
     text = update.message.text.strip()
     
     try:
         new_threads = int(text)
-        if 1 <= new_threads <= MAX_THREADS:
-            current_threads = new_threads
+        stats = get_user_stats()
+        limits = get_plan_limits(stats)
+        max_allowed = limits["max_threads"]
+
+        if 1 <= new_threads <= max_allowed:
+            # Update in database only (no global anymore)
+            update_user_stats({
+                "threads": new_threads
+            })
             
             # Show confirmation
             await update.message.reply_text(
-                f"✅ <b>Thread count updated to {current_threads} for your account.</b>",
+                f"✅ <b>Thread count updated to {new_threads} for your account.</b>",
                 parse_mode='HTML'
             )
             
             # Clear waiting state
             context.user_data['waiting_for_threads'] = False
             
-            # 🔥 AUTO REDIRECT TO MAIN MENU
-            await edit_to_main_menu(update, context)   # Wait, small fix needed ↓
+            # Redirect back to main menu
+            await edit_to_main_menu(update, context)
             
         else:
-            await update.message.reply_text(f"❌ Please send a number between 1 and {MAX_THREADS}.")
-            return  # Don't redirect on error
+            await update.message.reply_text(f"❌ Please send a number between 1 and {max_allowed}.")
+            return
     except ValueError:
         await update.message.reply_text("❌ Invalid number! Send a number only.")
         return
@@ -559,12 +636,28 @@ async def handle_document(update: Update, context: CallbackContext):
     total = len(accounts)
     hits = []
     start_time = time.time()
-    
+
+    # === Get fresh limits from database (no global needed) ===
+    stats = get_user_stats()
+    limits = get_plan_limits(stats)
+    user_threads = limits["current_threads"]   # ← this is the new way
+
     progress_msg = await update.message.reply_text(
-        f"🚀 Starting bulk check with <b>{current_threads}</b> threads...\n"
+        f"🚀 Starting bulk check with <b>{user_threads}</b> threads...\n"
         f"0/{total} completed (0%)", 
         parse_mode='HTML'
     )
+
+    # Daily limit check (already good)
+    if limits["daily_limit"] is not None:
+        if stats["today_scans"] + total > limits["daily_limit"]:
+            await update.message.reply_text(
+                f"❌ Daily limit reached!\n"
+                f"You have already used {stats['today_scans']}/{limits['daily_limit']} scans today.\n"
+                f"Upgrade your plan or wait until tomorrow.",
+                parse_mode='HTML'
+            )
+            return
     
     def check_account(acc):
         email, pwd = acc
@@ -572,7 +665,7 @@ async def handle_document(update: Update, context: CallbackContext):
     
     completed = 0
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=current_threads) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=user_threads) as executor:
         future_to_acc = {executor.submit(check_account, acc): acc for acc in accounts}
         
         for future in concurrent.futures.as_completed(future_to_acc):
@@ -586,7 +679,7 @@ async def handle_document(update: Update, context: CallbackContext):
                 try:
                     percent = int((completed / total) * 100)
                     await progress_msg.edit_text(
-                        f"🚀 Checking with {current_threads} threads...\n"
+                        f"🚀 Checking with {user_threads} threads...\n"
                         f"{completed}/{total} completed ({percent}%)",
                         parse_mode='HTML'
                     )
@@ -615,7 +708,7 @@ async def handle_document(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📁 <b>File:</b> <code>{document.file_name}</code>
 📊 <b>Processed:</b> <code>{completed}/{total}</code>
-🧵 <b>Threads:</b> <code>{current_threads}</code>
+🧵 <b>Threads:</b> <code>{user_threads}</code>
 📡 <b>Mode:</b> <code>Crunchyroll Check</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ <b>HITS:</b> <code>{hits_count}</code>
@@ -641,15 +734,14 @@ async def handle_document(update: Update, context: CallbackContext):
         await update.message.reply_document(
             document=open(hits_file, "rb"),
             filename=f"crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-            caption=f"🎉 <b>{hits_count} HIT(S) FOUND!</b>\n\nChecked with {current_threads} threads.",
+            caption=f"🎉 <b>{hits_count} HIT(S) FOUND!</b>\n\nChecked with {user_threads} threads.",
             parse_mode='HTML'
         )
 
 async def edit_to_main_menu(update_or_query, context):
-    """Smart function that works for BOTH:
-       - Callback buttons (back button)
-       - Normal message after setting threads"""
-    global current_threads
+    """Smart function that works for BOTH callback buttons and normal messages"""
+    stats = get_user_stats()
+    limits = get_plan_limits(stats)
     
     keyboard = [
         [
@@ -675,21 +767,19 @@ async def edit_to_main_menu(update_or_query, context):
 <i>Format: mail:pass (one per line)</i>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊<b>Your Dashboard:</b>
-🧵 Threads: <code><b>{current_threads}/{current_threads}</b></code>
-👑 Plan: <code><b>VIP</b></code>
-📅 Days Left: <b>-</b>
-📈 Daily Limit: <code><b>♾️</b></code>
+🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
+👑 Plan: <code><b>{limits['display_name']}</b></code>
+📅 Days Left: <b>{stats['expires']}</b>
+📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
 📡 Mode: <code><b>Crunchyroll Check</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
-    # FIXED: Proper detection
+    
     if hasattr(update_or_query, 'callback_query') and update_or_query.callback_query is not None:
-        # Called from button (back_to_main)
         query = update_or_query.callback_query
         await query.edit_message_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
     else:
-        # Called from normal message (after setting threads)
         await update_or_query.message.reply_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
 
 async def button_callback(update: Update, context: CallbackContext):
