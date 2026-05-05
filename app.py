@@ -7,20 +7,54 @@ import uuid
 import requests
 import concurrent.futures
 from datetime import datetime
+import asyncio
+from functools import partial
+from contextlib import asynccontextmanager
 
 # ============= CONFIGURATION =============
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", 7399488750))
 CHANNEL_USERNAME = "@caysredirect"
 
+TIMEOUT = 30
+MAX_THREADS = 125
+current_threads = MAX_THREADS
+
 # ============= OWNER RESTRICTION =============
 def is_owner(update: Update):
     return update.effective_user and update.effective_user.id == ADMIN_ID
 
-# ============= CRUNCHYROLL CHECKER CORE (100% UNTOUCHED) =============
-TIMEOUT = 30
-MAX_THREADS = 125
-current_threads = MAX_THREADS
+# ============= BLOCKING RUNNER =============
+async def run_blocking(func, *args, **kwargs):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, partial(func, *args, **kwargs))
+
+# ============= FASTAPI LIFESPAN =============
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global tg_app
+    await tg_app.initialize()
+    await tg_app.start()
+    
+    webhook_url = os.getenv("WEBHOOK_URL")
+    if webhook_url:
+        await tg_app.bot.set_webhook(
+            url=webhook_url,
+            allowed_updates=["message", "edited_message", "channel_post", "callback_query"]
+        )
+        print(f"✅ Webhook set → {webhook_url}")
+    else:
+        print("⚠️ WEBHOOK_URL env var is missing!")
+
+    print("🚀 Bot started on Vercel")
+    yield
+
+    await tg_app.stop()
+    await tg_app.shutdown()
+
+# ============= FASTAPI + TG APP =============
+app = FastAPI(lifespan=lifespan)
+tg_app = Application.builder().token(BOT_TOKEN).build()
 
 def format_single_result(result):
     """Returns nicely formatted HTML for single account check"""
@@ -175,15 +209,10 @@ def check_crunchyroll(email, password, proxy=None):
     
     return result
 
-# ============= FASTAPI + TELEGRAM =============
-app = FastAPI()
-tg_app = Application.builder().token(BOT_TOKEN).build()
-
 # ============= TELEGRAM BOT HANDLERS =============
 async def threads_command(update: Update, context: CallbackContext):
     if not is_owner(update):
-            await update.message.reply_text("❌ This bot is private.\nOnly the owner can use it.")
-            return
+        return
     global current_threads
     
     if not context.args:
@@ -213,7 +242,6 @@ async def threads_command(update: Update, context: CallbackContext):
 
 async def start(update: Update, context: CallbackContext):
     if not is_owner(update):
-        await update.message.reply_text("❌ This bot is private.\nOnly the owner can use it.")
         return
     
     welcome = f"""
@@ -302,7 +330,7 @@ async def handle_message(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
         
-        result = check_crunchyroll(email, password)   # ← logic untouched
+        result = await run_blocking(check_crunchyroll, email, password)
         
         response = format_single_result(result)
         await status_msg.edit_text(response, parse_mode='HTML')
@@ -355,23 +383,24 @@ async def handle_document(update: Update, context: CallbackContext):
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=current_threads) as executor:
         future_to_acc = {executor.submit(check_account, acc): acc for acc in accounts}
-        
+
         for future in concurrent.futures.as_completed(future_to_acc):
-            result = future.result()
+            result = await run_blocking(lambda f: f.result(), future)
             completed += 1
             
             if result['success']:
                 hits.append(result)
             
-            try:
-                percent = int((completed / total) * 100)
-                await progress_msg.edit_text(
-                    f"🚀 Checking with {current_threads} threads...\n"
-                    f"{completed}/{total} completed ({percent}%)",
-                    parse_mode='HTML'
-                )
-            except:
-                pass
+            if completed % 5 == 0 or completed == total:
+                try:
+                    percent = int((completed / total) * 100)
+                    await progress_msg.edit_text(
+                        f"🚀 Checking with {current_threads} threads...\n"
+                        f"{completed}/{total} completed ({percent}%)",
+                        parse_mode='HTML'
+                    )
+                except:
+                    pass
     
     # ====================== NEW PREMIUM SCAN COMPLETED SCREEN ======================
     elapsed = int(time.time() - start_time)
@@ -421,21 +450,26 @@ tg_app.add_handler(CommandHandler("threads", threads_command))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 
+# ============== WEBHOOK ENDPOINT ==============
 @app.post("/webhook")
 async def webhook(request: Request):
-    data = await request.json()
-    update = Update.de_json(data, tg_app.bot)
-    await tg_app.process_update(update)
-    return {"status": "ok"}
-
-@app.on_event("startup")
-async def startup_event():
-    await tg_app.initialize()
-    webhook_url = os.getenv("WEBHOOK_URL")  # Set this in Vercel env
-    if webhook_url:
-        await tg_app.bot.set_webhook(url=webhook_url)
-        print(f"✅ Webhook set to {webhook_url}")
-    print("🚀 Bot started on Vercel")
+    try:
+        data = await request.json()
+        update = Update.de_json(data, tg_app.bot)
+        
+        # Process update safely
+        await tg_app.process_update(update)
+        return {"status": "ok"}
+    
+    except Exception as e:
+        print(f"❌ Webhook error: {e}")
+        # Still return 200 so Telegram stops retrying
+        return {"status": "error"}
+    
+# Optional: Health check
+@app.get("/webhook")
+async def webhook_get():
+    return {"status": "Webhook is active. Use POST only."}
 
 if __name__ == "__main__":
     import uvicorn
