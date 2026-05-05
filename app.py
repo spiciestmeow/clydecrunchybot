@@ -311,7 +311,7 @@ async def show_statistics_menu(query, context):
 📈 <b>General Statistics:</b>
 ✅ <b>Total Scans:</b> {stats['total_scans']}
 💎 <b>Total Hits:</b> {stats['total_hits']}
-🆓 <b>Total FREE:</b> {stats['total_free']}
+❌ <b>Total Bad:</b> {stats.get('total_free', 0)}
 🎯 <b>Success Rate:</b> {success_rate}%
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Today's Statistics:</b>
@@ -782,10 +782,12 @@ async def handle_message(update: Update, context: CallbackContext):
             await manage_result_pin(update, context, status_msg.message_id)
             
             hits_increment = 1 if result['success'] else 0
+            bad_increment = 1 if not result['success'] else 0
             
             update_user_stats({
                 "total_scans": stats["total_scans"] + 1,
                 "total_hits": stats["total_hits"] + hits_increment,
+                "total_free": stats.get("total_free", 0) + bad_increment,   # ← Now tracks BAD
                 "today_scans": stats["today_scans"] + 1
             })
             
@@ -893,9 +895,10 @@ async def handle_document(update: Update, context: CallbackContext):
     update_user_stats({
         "total_scans": current_stats["total_scans"] + total,
         "total_hits": current_stats["total_hits"] + hits_count,
+        "total_free": current_stats.get("total_free", 0) + bad_count,   # ← Now tracks BAD
         "today_scans": current_stats["today_scans"] + total
     })
-    
+
     # ====================== SUMMARY ======================
     elapsed = int(time.time() - start_time)
     cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
@@ -920,14 +923,16 @@ async def handle_document(update: Update, context: CallbackContext):
     # 🔥 AUTO PIN THE BULK RESULT SUMMARY
     await manage_result_pin(update, context, progress_msg.message_id)
     
-    # ====================== SEND HITS FILE ======================
-    if hits:
+    # ====================== SEND RESULTS FILES ======================
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    
+    # 1. Send HITS file (only if hits found)
+    if hits_count > 0:
         hits_text = "EMAIL:PASSWORD | PLAN | EXPIRY | COUNTRY\n" + "="*60 + "\n"
         for hit in hits:
             hits_text += f"{hit['email']}:{hit['password']} | {hit['plan']} | {hit['expiry']} | {hit['country']}\n"
         
-        hits_file = f"/tmp/crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-        
+        hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
         with open(hits_file, "w", encoding="utf-8") as f:
             f.write(hits_text)
         
@@ -935,6 +940,28 @@ async def handle_document(update: Update, context: CallbackContext):
             document=open(hits_file, "rb"),
             filename=f"crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
             caption=f"🎉 <b>{hits_count} HIT(S) FOUND!</b>\n\nChecked with {user_threads} threads.",
+            parse_mode='HTML'
+        )
+
+    # 2. Send BAD file (always sent when there are bad accounts)
+    if bad_count > 0:
+        bad_text = "EMAIL:PASSWORD | STATUS\n" + "="*40 + "\n"
+        
+        # Fast lookup for hits
+        hit_emails = {hit['email'] for hit in hits}
+        
+        for email, pwd in accounts:
+            status = "HIT" if email in hit_emails else "BAD"
+            bad_text += f"{email}:{pwd} | {status}\n"
+        
+        bad_file = f"/tmp/crunchy_bad_{timestamp}.txt"
+        with open(bad_file, "w", encoding="utf-8") as f:
+            f.write(bad_text)
+        
+        await update.message.reply_document(
+            document=open(bad_file, "rb"),
+            filename=f"crunchy_bad_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+            caption=f"❌ <b>{bad_count} BAD accounts</b>\n\nTotal checked: {total} | Threads: {user_threads}",
             parse_mode='HTML'
         )
 
