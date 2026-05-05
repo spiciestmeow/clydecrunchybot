@@ -1,4 +1,5 @@
 fastapi
 uvicorn
-python-telegram-bot==21.4
+python-telegram-bot
+supabase
 requests
