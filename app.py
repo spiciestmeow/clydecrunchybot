@@ -580,7 +580,8 @@ async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()  # Remove loading animation
 
-    if not is_owner(query.message):
+    # FIXED: Use update instead of query.message
+    if not is_owner(update):
         await query.edit_message_text("❌ Access Denied.")
         return
 
@@ -612,9 +613,12 @@ async def button_callback(update: Update, context: CallbackContext):
         await handle_api_mode(query, context)
     
     elif data == "back_to_main":
-        # Return to main dashboard
-        await query.message.delete()
-        await start(update, context)  # Re-send clean start menu
+        # Fixed: delete old message and send fresh start menu
+        try:
+            await query.message.delete()
+        except:
+            pass
+        await start(update, context)  # Now safe
     
     elif data == "menu_support":
         text = "<b>📞 Support</b>\n\nContact @proboy_23 for any issues."
@@ -623,7 +627,6 @@ async def button_callback(update: Update, context: CallbackContext):
     else:
         text = "Unknown option"
         await query.edit_message_text(text, parse_mode='HTML')
-
 # Register handlers
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("help", help_command))
