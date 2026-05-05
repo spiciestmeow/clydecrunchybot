@@ -59,7 +59,6 @@ app = FastAPI(lifespan=lifespan)
 tg_app = Application.builder().token(BOT_TOKEN).build()
 
 # ============= TELEGRAM BOT HANDLERS =============
-
 # ============= NEW: SETTINGS MENU FUNCTIONS =============
 async def show_settings_menu(query, context):
     """Replicates the exact Settings Menu from your screenshot"""
@@ -293,36 +292,6 @@ def check_crunchyroll(email, password, proxy=None):
     return result
 
 # ============= TELEGRAM BOT HANDLERS =============
-async def threads_command(update: Update, context: CallbackContext):
-    if not is_owner(update):
-        return
-    global current_threads
-    
-    if not context.args:
-        await update.message.reply_text(
-            f"🧵 Current Threads: <b>{current_threads}</b>\n\n"
-            f"Usage: <code>/threads &lt;number&gt;</code>\n"
-            f"Example: <code>/threads 30</code>\n\n"
-            f"Recommended: 10-30 (Free users)\n"
-            f"Max allowed: {MAX_THREADS}",
-            parse_mode='HTML'
-        )
-        return
-    
-    try:
-        new_threads = int(context.args[0])
-        if 1 <= new_threads <= MAX_THREADS:
-            current_threads = new_threads
-            await update.message.reply_text(
-                f"✅ Threads updated successfully!\n"
-                f"🧵 New Thread Count: <b>{current_threads}</b>",
-                parse_mode='HTML'
-            )
-        else:
-            await update.message.reply_text(f"❌ Please use number between 1 and {MAX_THREADS}")
-    except:
-        await update.message.reply_text("❌ Invalid number! Send a number only.")
-
 async def start(update: Update, context: CallbackContext):
     if not is_owner(update):
         await update.message.reply_text("❌ This bot is private.", parse_mode='HTML')
@@ -420,9 +389,9 @@ This bot is free to use!
 """
     await update.message.reply_text(about_text)
 
-# ============= NEW: THREAD INPUT HANDLER (reuses your logic) =============
+# ============= NEW: THREAD INPUT HANDLER =============
 async def process_thread_count_input(update: Update, context: CallbackContext):
-    """Handles number input after clicking 'Set Threads' (exact match to your screenshot)"""
+    """Handles number input after clicking 'Set Threads' + auto redirect to main menu"""
     global current_threads
     text = update.message.text.strip()
     
@@ -430,16 +399,25 @@ async def process_thread_count_input(update: Update, context: CallbackContext):
         new_threads = int(text)
         if 1 <= new_threads <= MAX_THREADS:
             current_threads = new_threads
+            
+            # Show confirmation
             await update.message.reply_text(
                 f"✅ <b>Thread count updated to {current_threads} for your account.</b>",
                 parse_mode='HTML'
             )
-            # Clear state
+            
+            # Clear waiting state
             context.user_data['waiting_for_threads'] = False
+            
+            # 🔥 AUTO REDIRECT TO MAIN MENU
+            await edit_to_main_menu(update, context)   # Wait, small fix needed ↓
+            
         else:
             await update.message.reply_text(f"❌ Please send a number between 1 and {MAX_THREADS}.")
+            return  # Don't redirect on error
     except ValueError:
         await update.message.reply_text("❌ Invalid number! Send a number only.")
+        return
 
 async def handle_message(update: Update, context: CallbackContext):
     if not is_owner(update):
@@ -577,7 +555,7 @@ async def handle_document(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
 
-async def edit_to_main_menu(query, context):
+async def edit_to_main_menu(query_or_update, context):
     """Edit current message back to main menu (clean navigation)"""
     global current_threads
     
@@ -613,7 +591,12 @@ async def edit_to_main_menu(query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
-    await query.edit_message_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
+    if hasattr(query_or_update, 'callback_query'):  # From button
+        query = query_or_update.callback_query
+        await query.edit_message_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
+    else:  # From normal message (like thread input)
+        update = query_or_update
+        await update.message.reply_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
 
 async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -666,7 +649,6 @@ tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("help", help_command))
 tg_app.add_handler(CommandHandler("stats", stats_command))
 tg_app.add_handler(CommandHandler("about", about_command))
-tg_app.add_handler(CommandHandler("threads", threads_command))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 tg_app.add_handler(CallbackQueryHandler(button_callback))
