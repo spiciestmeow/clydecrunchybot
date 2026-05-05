@@ -324,7 +324,7 @@ async def show_statistics_menu(query, context):
 🎁 <b>Daily Reward Claimed Today:</b> {'Yes' if stats['daily_reward_claimed'] else 'No'}
 ✨ <b>Daily Reward Lines (Active):</b> {stats['daily_reward_lines']}
 👥 <b>Referral Bonus Lines:</b> +{stats['referral_bonus_lines']}
-📦 <b>Base Plan Limit:</b> {stats['base_limit_text']}
+📦 <b>Base Plan Limit:</b> {limits['base_limit_text']}
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
@@ -778,6 +778,9 @@ async def handle_message(update: Update, context: CallbackContext):
             response = format_single_result(result)
             await status_msg.edit_text(response, parse_mode='HTML')
             
+            # 🔥 AUTO PIN THE RESULT
+            await manage_result_pin(update, context, status_msg.message_id)
+            
             hits_increment = 1 if result['success'] else 0
             
             update_user_stats({
@@ -913,6 +916,9 @@ async def handle_document(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
     await progress_msg.edit_text(summary, parse_mode='HTML')
+
+    # 🔥 AUTO PIN THE BULK RESULT SUMMARY
+    await manage_result_pin(update, context, progress_msg.message_id)
     
     # ====================== SEND HITS FILE ======================
     if hits:
@@ -980,6 +986,30 @@ async def edit_to_main_menu(update_or_query, context):
         await query.edit_message_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
     else:
         await update_or_query.message.reply_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
+
+async def manage_result_pin(update: Update, context: CallbackContext, message_id: int):
+    """Unpin previous result and pin the new one (keeps only latest result pinned)"""
+    chat_id = update.effective_chat.id
+    
+    # Unpin old result if exists (prevents chat clutter)
+    old_id = context.user_data.get('last_pinned_result_id')
+    if old_id:
+        try:
+            await context.bot.unpin_chat_message(chat_id=chat_id, message_id=old_id)
+        except:
+            pass  # already deleted or error
+    
+    # Pin the new result
+    try:
+        await context.bot.pin_chat_message(
+            chat_id=chat_id,
+            message_id=message_id,
+            disable_notification=True
+        )
+        context.user_data['last_pinned_result_id'] = message_id
+    except Exception as e:
+        print(f"⚠️ Failed to pin result: {e}")
+
 
 async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
