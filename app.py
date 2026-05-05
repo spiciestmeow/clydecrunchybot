@@ -28,7 +28,7 @@ TIMEOUT = 30
 PLAN_CONFIG = {
     "FREE": {
         "display_name": "FREE",
-        "daily_limit": 5000,          # lines per day
+        "daily_limit": 5000,
         "max_threads": 10,
         "multi_scan_max_files": 1,
         "queue_waiting": True
@@ -42,7 +42,7 @@ PLAN_CONFIG = {
     },
     "VIP": {
         "display_name": "VIP PLAN (MONTHLY)",
-        "daily_limit": None,          # unlimited
+        "daily_limit": None,
         "max_threads": 125,
         "multi_scan_max_files": 5,
         "queue_waiting": False
@@ -164,6 +164,54 @@ def update_user_stats(data: dict):
     data["updated_at"] = datetime.now().isoformat()
     supabase.table("user_stats").update(data).eq("user_id", ADMIN_ID).execute()
 
+# ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
+async def show_membership_menu(query, context):
+    stats = get_user_stats()
+    limits = get_plan_limits(stats)
+    
+    current_plan_text = f"✅ Your Current Plan: <b>{limits['display_name']}</b>"
+    
+    text = f"""
+🔥 <b>MEMBERSHIP PLANS</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🆓 <b>FREE PLAN</b>
+• Daily Limit: 5,000 lines
+• Max Threads: 1-10
+• Single scan at a time
+• Queue Waiting System
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⭐ <b>BASIC PLAN (WEEKLY)</b>
+• Duration: 7 Days
+• Daily Limit: 25,000 lines
+• Max Threads: 1-75
+• Multi-Scan: Up to 3 files
+• No Queue Waiting
+• Priority Support
+• Price: <b>200 Telegram Stars</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👑 <b>VIP PLAN (MONTHLY)</b>
+• Duration: 30 Days
+• Daily Limit: Unlimited lines
+• Max Threads: 1-125
+• Multi-Scan: Up to 5 files
+• No Queue Waiting
+• ALL IN ONE Scanner Mode
+• Price: <b>600 Telegram Stars</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{current_plan_text}
+
+⚠️ <b>Payment Method</b>
+Telegram Stars only (currently accepted)
+
+💳 To Purchase A Membership
+Contact: @caydigitals
+    """.strip()
+
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
+
 # ============= STATISTICS MENU (Exact match to your screenshot) =============
 async def show_statistics_menu(query, context):
     stats = get_user_stats()
@@ -213,6 +261,11 @@ async def show_statistics_menu(query, context):
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
 
 async def show_settings_menu(query, context):
+    """Replicates the exact Settings Menu"""
+    # ←←← IMPORTANT: Clear waiting state when returning from Set Threads
+    if 'waiting_for_threads' in context.user_data:
+        context.user_data['waiting_for_threads'] = False
+
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     
@@ -487,60 +540,6 @@ async def start(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
-async def help_command(update: Update, context: CallbackContext):
-    if not is_owner(update):
-        return
-    help_text = """
-COMMANDS:
-
-/start - Start the bot
-/help - Show this help
-/stats - Bot statistics
-/about - About developer
-
-Input Format:
-email:password
-
-Bulk Check:
-Send a .txt file with one account per line:
-user1@example.com:pass123
-user2@example.com:pass456
-"""
-    await update.message.reply_text(help_text)
-
-async def stats_command(update: Update, context: CallbackContext):
-    if not is_owner(update):
-        return
-    stats_text = """
-BOT STATISTICS
-
-Status: Online
-Bot Version: 2.0
-Uptime: Running
-Creator: @proboy_23
-
-Use /check to test an account
-"""
-    await update.message.reply_text(stats_text)
-
-async def about_command(update: Update, context: CallbackContext):
-    if not is_owner(update):
-        return
-    about_text = """
-ABOUT DEVELOPER
-
-Created by: @proboy_23
-Channel: @acgiveaway_2
-Support: @allichetoolsgroup
-
-Support the creator:
-Binance ID: 801774085
-USDT (TRC20): TBeHkEpdtDqzzyvtWgMgiR1bhS7LDpi19L
-
-This bot is free to use!
-"""
-    await update.message.reply_text(about_text)
-
 async def process_thread_count_input(update: Update, context: CallbackContext):
     """Handles number input after clicking 'Set Threads'"""
     text = update.message.text.strip()
@@ -550,9 +549,10 @@ async def process_thread_count_input(update: Update, context: CallbackContext):
         stats = get_user_stats()
         limits = get_plan_limits(stats)
         max_allowed = limits["max_threads"]
+        plan_name = limits["display_name"]
 
         if 1 <= new_threads <= max_allowed:
-            # Update in database only (no global anymore)
+            # Update in database
             update_user_stats({
                 "threads": new_threads
             })
@@ -570,10 +570,17 @@ async def process_thread_count_input(update: Update, context: CallbackContext):
             await edit_to_main_menu(update, context)
             
         else:
-            await update.message.reply_text(f"❌ Please send a number between 1 and {max_allowed}.")
+            await update.message.reply_text(
+                f"❌ Your plan <b>({plan_name})</b> allows a maximum of <b>{max_allowed}</b> threads.",
+                parse_mode='HTML'
+            )
             return
+
     except ValueError:
-        await update.message.reply_text("❌ Invalid number! Send a number only.")
+        await update.message.reply_text(
+            "❌ Invalid number! Send a number only.",
+            parse_mode='HTML'
+        )
         return
 
 async def handle_message(update: Update, context: CallbackContext):
@@ -582,16 +589,30 @@ async def handle_message(update: Update, context: CallbackContext):
     
     text = update.message.text.strip()
     
-    # === NEW: Check if user is in thread settings mode (from Settings menu) ===
+    # === Handle thread setting mode ===
     if context.user_data.get('waiting_for_threads'):
         await process_thread_count_input(update, context)
-        return  # Important: skip normal combo check
+        return
     
-    # Original message handling (unchanged)
+    # === SINGLE ACCOUNT CHECK ===
     if ':' in text and '@' in text:
         parts = text.split(':', 1)
         email = parts[0].strip()
         password = parts[1].strip()
+        
+        # Get current stats and check daily limit (same as bulk)
+        stats = get_user_stats()
+        limits = get_plan_limits(stats)
+        
+        if limits["daily_limit"] is not None:  # Not VIP
+            if stats["today_scans"] + 1 > limits["daily_limit"]:
+                await update.message.reply_text(
+                    f"❌ Daily limit reached!\n"
+                    f"You have already used {stats['today_scans']}/{limits['daily_limit']} scans today.\n"
+                    f"Upgrade your plan or wait until tomorrow.",
+                    parse_mode='HTML'
+                )
+                return
         
         status_msg = await update.message.reply_text(
             f"🔍 Checking <code>{email}</code>...\nPlease wait...", 
@@ -602,6 +623,16 @@ async def handle_message(update: Update, context: CallbackContext):
         
         response = format_single_result(result)
         await status_msg.edit_text(response, parse_mode='HTML')
+        
+        # ====================== UPDATE STATS FOR SINGLE CHECK ======================
+        hits_increment = 1 if result['success'] else 0
+        
+        update_user_stats({
+            "total_scans": stats["total_scans"] + 1,
+            "total_hits": stats["total_hits"] + hits_increment,
+            "today_scans": stats["today_scans"] + 1
+        })
+        
     else:
         await update.message.reply_text(
             "❌ Invalid format!\n\nSend like this: <code>email:password</code>\n\nType /help for more info.", 
@@ -740,6 +771,10 @@ async def handle_document(update: Update, context: CallbackContext):
 
 async def edit_to_main_menu(update_or_query, context):
     """Smart function that works for BOTH callback buttons and normal messages"""
+    # ←←← IMPORTANT: Clear waiting state when returning to main menu
+    if 'waiting_for_threads' in context.user_data:
+        context.user_data['waiting_for_threads'] = False
+
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     
@@ -804,8 +839,7 @@ async def button_callback(update: Update, context: CallbackContext):
         await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
     
     elif data == "menu_membership":
-        text = "<b>💎 Membership</b>\n\nCurrent Plan: <b>VIP</b>\nExpiry: Lifetime"
-        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
+        await show_membership_menu(query, context)
     
     elif data == "menu_settings":
         await show_settings_menu(query, context)
