@@ -325,11 +325,8 @@ async def threads_command(update: Update, context: CallbackContext):
 
 async def start(update: Update, context: CallbackContext):
     if not is_owner(update):
-            await update.message.reply_text(
-                "❌ This bot is private.",
-                parse_mode='HTML'
-            )
-            return
+        await update.message.reply_text("❌ This bot is private.", parse_mode='HTML')
+        return
     
     keyboard = [
         [
@@ -342,7 +339,7 @@ async def start(update: Update, context: CallbackContext):
         ],
         [
             InlineKeyboardButton("📞 Support", callback_data="menu_support"),
-            InlineKeyboardButton("⚙️ Settings   ", callback_data="menu_settings")
+            InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings")
         ]
     ]
 
@@ -580,6 +577,44 @@ async def handle_document(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
 
+async def edit_to_main_menu(query, context):
+    """Edit current message back to main menu (clean navigation)"""
+    global current_threads
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📊 My Stats", callback_data="menu_stats"),
+            InlineKeyboardButton("🔗 My Referrals", callback_data="menu_referrals")
+        ],
+        [
+            InlineKeyboardButton("🎁 Rewards & Gifts", callback_data="menu_rewards"),
+            InlineKeyboardButton("💎 Membership", callback_data="menu_membership")
+        ],
+        [
+            InlineKeyboardButton("📞 Support", callback_data="menu_support"),
+            InlineKeyboardButton("⚙️ Settings", callback_data="menu_settings")
+        ]
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    welcome = f"""
+<b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗥𝗨𝗡𝗖𝗛𝗬𝗥𝗢𝗟𝗟 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📤 <b>Send your combo list (.txt file)</b>
+<i>Format: mail:pass (one per line)</i>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊<b>Your Dashboard:</b>
+🧵 Threads: <code><b>{current_threads}/{current_threads}</b></code>
+👑 Plan: <code><b>VIP</b></code>
+📅 Days Left: <b>-</b>
+📈 Daily Limit: <code><b>♾️</b></code>
+📡 Mode: <code><b>Crunchyroll Check</b></code>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>👇 Select an option from the menu below:</b>
+"""
+    await query.edit_message_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
+
 async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()  # Remove loading animation
@@ -617,12 +652,7 @@ async def button_callback(update: Update, context: CallbackContext):
         await handle_api_mode(query, context)
     
     elif data == "back_to_main":
-        # Fixed: delete old message and send fresh start menu
-        try:
-            await query.message.delete()
-        except:
-            pass
-        await start(update, context)  # Now safe
+        await edit_to_main_menu(query, context)
     
     elif data == "menu_support":
         text = "<b>📞 Support</b>\n\nContact @proboy_23 for any issues."
