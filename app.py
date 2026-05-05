@@ -555,8 +555,10 @@ async def handle_document(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
 
-async def edit_to_main_menu(query_or_update, context):
-    """Edit current message back to main menu (clean navigation)"""
+async def edit_to_main_menu(update_or_query, context):
+    """Smart function that works for BOTH:
+       - Callback buttons (back button)
+       - Normal message after setting threads"""
     global current_threads
     
     keyboard = [
@@ -591,12 +593,14 @@ async def edit_to_main_menu(query_or_update, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
-    if hasattr(query_or_update, 'callback_query'):  # From button
-        query = query_or_update.callback_query
+    # FIXED: Proper detection
+    if hasattr(update_or_query, 'callback_query') and update_or_query.callback_query is not None:
+        # Called from button (back_to_main)
+        query = update_or_query.callback_query
         await query.edit_message_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
-    else:  # From normal message (like thread input)
-        update = query_or_update
-        await update.message.reply_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
+    else:
+        # Called from normal message (after setting threads)
+        await update_or_query.message.reply_text(welcome, parse_mode='HTML', reply_markup=reply_markup)
 
 async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -635,7 +639,7 @@ async def button_callback(update: Update, context: CallbackContext):
         await handle_api_mode(query, context)
     
     elif data == "back_to_main":
-        await edit_to_main_menu(query, context)
+        await edit_to_main_menu(update, context)   # ← Fixed
     
     elif data == "menu_support":
         text = "<b>📞 Support</b>\n\nContact @proboy_23 for any issues."
