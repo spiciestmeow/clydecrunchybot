@@ -780,7 +780,14 @@ async def handle_message(update: Update, context: CallbackContext):
         
     else:
         await update.message.reply_text(
-            "❌ Invalid format!\n\nSend like this: <code>email:password</code>\n\nType /help for more info.", 
+            """❌ <b>Invalid Format!</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Send like this:
+<code>email:password</code>
+<b>Example:</b>
+<code>user@example.com:supersecret123</code>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 You can also send a <b>.txt file</b> with multiple accounts (one per line).""",
             parse_mode='HTML'
         )
 
