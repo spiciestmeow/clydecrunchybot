@@ -114,27 +114,27 @@ async def show_statistics_menu(query, context):
 📅 <b>Registered:</b> {stats['registered']}
 👑 <b>Plan:</b> {stats['plan']}
 📆 <b>Expires:</b> {stats['expires']}
-🔴 <b>Mode:</b> {stats['mode']}
+📡 <b>Mode:</b> {stats['mode']}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <b>{current_threads} / {MAX_THREADS}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ <b>Total Scans:</b> {stats['total_scans']}
-🎯 <b>Total Hits:</b> {stats['total_hits']}
+💎 <b>Total Hits:</b> {stats['total_hits']}
 🆓 <b>Total FREE:</b> {stats['total_free']}
-📊 <b>Success Rate:</b> {success_rate}%
+🎯 <b>Success Rate:</b> {success_rate}%
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📅 <b>Today's Statistics:</b>
-🔥 <b>Scans Used:</b> {stats['today_scans']}
+📊 <b>Today's Statistics:</b>
+📊 <b>Scans Used:</b> {stats['today_scans']}
 ⏳ <b>Remaining:</b> ♾️ / ♾️
 👥 <b>Referrals:</b> {stats['referrals']}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 <b>Rewards & Limits Details:</b>
 🎟️ <b>Claimed Codes:</b> 0
-✅ <b>Daily Reward Claimed Today:</b> {'Yes' if stats['daily_reward_claimed'] else 'No'}
-⭐ <b>Daily Reward Lines (Active):</b> {stats['daily_reward_lines']}
-🔗 <b>Referral Bonus Lines:</b> +{stats['referral_bonus_lines']}
-📌 <b>Base Plan Limit:</b> {stats['base_plan_limit']}
+🎁 <b>Daily Reward Claimed Today:</b> {'Yes' if stats['daily_reward_claimed'] else 'No'}
+✨ <b>Daily Reward Lines (Active):</b> {stats['daily_reward_lines']}
+👥 <b>Referral Bonus Lines:</b> +{stats['referral_bonus_lines']}
+📦 <b>Base Plan Limit:</b> {stats['base_plan_limit']}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
