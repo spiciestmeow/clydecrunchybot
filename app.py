@@ -863,9 +863,6 @@ async def button_callback(update: Update, context: CallbackContext):
 
 # Register handlers
 tg_app.add_handler(CommandHandler("start", start))
-tg_app.add_handler(CommandHandler("help", help_command))
-tg_app.add_handler(CommandHandler("stats", stats_command))
-tg_app.add_handler(CommandHandler("about", about_command))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 tg_app.add_handler(CallbackQueryHandler(button_callback))
