@@ -234,6 +234,7 @@ def update_user_stats_general(user_id: int, data: dict):
     return len(response.data) > 0  # True if row was updated
 
 async def show_support_menu(query, context):
+    context.user_data['in_main_menu'] = False
     """Replicates the exact Support & Contact page from your screenshot"""
     
     text = f"""
@@ -265,6 +266,7 @@ Main Channel: https://t.me/+MfJaSNxdX5pjNzE9
 
 # ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
 async def show_membership_menu(query, context):
+    context.user_data['in_main_menu'] = False
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     
@@ -313,6 +315,7 @@ Contact: @caydigitals
 
 # ============= STATISTICS MENU (Exact match to your screenshot) =============
 async def show_statistics_menu(query, context):
+    context.user_data['in_main_menu'] = False
     stats = get_user_stats()
     
     # Auto reset daily stats if new day
@@ -435,6 +438,7 @@ async def set_plan_command(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Failed to update user. Make sure the user has used the bot before.")
 
 async def show_settings_menu(query, context):
+    context.user_data['in_main_menu'] = False
     """Replicates the exact Settings Menu"""
     # ←←← IMPORTANT: Clear waiting state when returning from Set Threads
     if 'waiting_for_threads' in context.user_data:
@@ -474,6 +478,7 @@ Current: <b>Crunchyroll</b>
     )
 
 async def handle_set_threads(query, context):
+    context.user_data['in_main_menu'] = False
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     plan = limits["display_name"]
@@ -501,6 +506,7 @@ Send a number between 1 and {max_t} to set your thread count.
     context.user_data['waiting_for_threads'] = True
 
 async def handle_api_mode(query, context):
+    context.user_data['in_main_menu'] = False
     """Placeholder for API Mode (you can expand later without touching checker)"""
     text = f"""
 <b>API Mode</b>
@@ -668,6 +674,7 @@ def check_crunchyroll(email, password, proxy=None):
     return result
 
 async def start(update: Update, context: CallbackContext):
+    context.user_data['in_main_menu'] = True
     if not is_owner(update):
         await update.message.reply_text("❌ This bot is private.", parse_mode='HTML')
         return
@@ -715,8 +722,6 @@ async def start(update: Update, context: CallbackContext):
         parse_mode='HTML',
         reply_markup=reply_markup
     )
-
-    context.user_data['in_main_menu'] = True
 
 async def process_thread_count_input(update: Update, context: CallbackContext):
     """Handles number input after clicking 'Set Threads'"""
@@ -773,8 +778,9 @@ async def handle_message(update: Update, context: CallbackContext):
         return
     
     # 🔥 NEW: Only trigger single checker when on the main dashboard
-    if context.user_data.get('in_main_menu', False):
+    if context.user_data.get('in_main_menu', False) is True:
         if ':' in text and '@' in text:
+
             parts = text.split(':', 1)
             email = parts[0].strip()
             password = parts[1].strip()
@@ -816,7 +822,7 @@ async def handle_message(update: Update, context: CallbackContext):
                 "total_free": stats.get("total_free", 0) + bad_increment,   # ← Now tracks BAD
                 "today_scans": stats["today_scans"] + 1
             })
-            
+            return
     else:
 
         await update.message.reply_text(
@@ -992,8 +998,8 @@ async def handle_document(update: Update, context: CallbackContext):
         )
 
 async def edit_to_main_menu(update_or_query, context):
-    """Smart function that works for BOTH callback buttons and normal messages"""
     context.user_data['in_main_menu'] = True
+    """Smart function that works for BOTH callback buttons and normal messages"""
     # ←←← IMPORTANT: Clear waiting state when returning to main menu
     if 'waiting_for_threads' in context.user_data:
         context.user_data['waiting_for_threads'] = False
