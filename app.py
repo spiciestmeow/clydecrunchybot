@@ -329,29 +329,29 @@ async def show_statistics_menu(query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👤 <b>User ID:</b> <code>{stats['user_id']}</code>
 📅 <b>Registered:</b> <code>{stats['registered']}</code>
-👑 <b>Plan:<code></b> {stats['plan']}</code>
-📆 <b>Plan Expires In:<code></b> {stats['expires']} <b>({get_days_remaining(stats['expires'])})</b></code>
+👑 <b>Plan:</b> <code>{stats['plan']}</code>
+📆 <b>Plan Expires In:</b> <code>{stats['expires']} <b>({get_days_remaining(stats['expires'])})</b></code>
 📡 <b>Mode:<code></b> {stats['mode']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <code><b>{limits['current_threads']} / {limits['max_threads']}</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
-✅ <b>Total Scans:<code></b> {stats['total_scans']}</code>
-💎 <b>Total Hits:<code></b> {stats['total_hits']}</code>
-❌ <b>Total Bad:<code><code></b> {stats.get('total_free', 0)}</code>
-🎯 <b>Success Rate:<code></b> {success_rate}%</code>
+✅ <b>Total Scans:</b> <code>{stats['total_scans']}</code>
+💎 <b>Total Hits:</b> <code>{stats['total_hits']}</code>
+❌ <b>Total Bad:</b> <code>{stats.get('total_free', 0)}</code>
+🎯 <b>Success Rate:</b> <code>{success_rate}%</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Today's Statistics:</b>
-📊 <b>Scans Used:<code></b> {stats['today_scans']}</code>
-⏳ <b>Remaining:<code></b> {limits['remaining_text']}</code>
-👥 <b>Referrals:<code></b> {stats['referrals']}</code>
+📊 <b>Scans Used:</b> <code>{stats['today_scans']}</code>
+⏳ <b>Remaining:</b> <code>{limits['remaining_text']}</code>
+👥 <b>Referrals:</b> <code>{stats['referrals']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 <b>Rewards & Limits Details:</b>
 🎟️ <b>Claimed Codes:</b> <code>0</code>
-🎁 <b>Daily Reward Claimed Today:<code></b> {'Yes' if stats['daily_reward_claimed'] else 'No'}</code>
-✨ <b>Daily Reward Lines (Active):</b><code> {stats['daily_reward_lines']}</code>
-👥 <b>Referral Bonus Lines:<code></b> +{stats['referral_bonus_lines']}</code>
-📦 <b>Base Plan Limit:<code></b> {limits['base_limit_text']}</code>
+🎁 <b>Daily Reward Claimed Today:</b> <code>{'Yes' if stats['daily_reward_claimed'] else 'No'}</code>
+✨ <b>Daily Reward Lines (Active):</b> <code>{stats['daily_reward_lines']}</code>
+👥 <b>Referral Bonus Lines:</b> <code>+{stats['referral_bonus_lines']}</code>
+📦 <b>Base Plan Limit:</b> <code>{limits['base_limit_text']}</code>
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
