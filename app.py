@@ -72,6 +72,33 @@ PLAN_DEFAULTS = {
     }
 }
 
+# ============= DAYS REMAINING HELPER =============
+def get_days_remaining(expires_str: str) -> str:
+    """Returns nice countdown text for dashboard and stats"""
+    if not expires_str or expires_str.upper() == "N/A":
+        return "♾️"  # FREE plan or no expiry
+    
+    try:
+        # Handle both "2026-06-04" and "2026-06-04T..." formats
+        date_part = expires_str.split('T')[0]
+        expires_date = datetime.strptime(date_part, "%Y-%m-%d").date()
+        today = date.today()
+        
+        delta = (expires_date - today).days
+        
+        if delta < 0:
+            return "❌ Expired"
+        elif delta == 0:
+            return "Expires today"
+        elif delta == 1:
+            return "1 day left"
+        else:
+            return f"{delta} days left"
+            
+    except Exception:
+        # Fallback if date format is weird
+        return expires_str
+
 def get_plan_limits(stats: dict):
     """Returns dynamic limits based on user's plan + bonuses"""
     plan_key = stats.get("plan", "FREE").upper()
@@ -303,7 +330,7 @@ async def show_statistics_menu(query, context):
 👤 <b>User ID:</b> <code>{stats['user_id']}</code>
 📅 <b>Registered:</b> {stats['registered']}
 👑 <b>Plan:</b> {stats['plan']}
-📆 <b>Expires:</b> {stats['expires']}
+📆 <b>Plan Expires In:</b> {stats['expires']} <b>({get_days_remaining(stats['expires'])})</b>
 📡 <b>Mode:</b> {stats['mode']}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <b>{limits['current_threads']} / {limits['max_threads']}</b>
@@ -496,7 +523,6 @@ def format_single_result(result):
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
-
 ────────────────
 📊 <b>Account Details</b>
 • Verified: <b>{result['email_verified']}</b>
@@ -678,7 +704,7 @@ async def start(update: Update, context: CallbackContext):
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
 👑 Plan: <code><b>{limits['display_name']}</b></code>
-📅 Days Left: <b>{stats['expires']}</b>
+📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
 📡 Mode: <code><b>Crunchyroll Check</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
