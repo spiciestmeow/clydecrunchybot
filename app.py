@@ -575,7 +575,7 @@ def format_single_result(result):
 • <b>Active:</b> <code>✅ {result['active']}</code>
 • <b>Country:</b> <code>{country_display}</code>
 
-────────────────
+┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 Channel: {CHANNEL_USERNAME}
         """.strip()
     else:
