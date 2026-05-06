@@ -569,15 +569,15 @@ def format_single_result(result):
 🔑 <b>Password:</b> <code>{result['password']}</code>
 ────────────────
 📊 <b>Account Details</b>
-• <b>Verified:</b> <code>{result['email_verified']}</code>
-• <b>Created:</b> <code>{result['account_creation'] or 'N/A'}</code>
-• <b>Plan:</b> <code>{result['plan']}</code>
-• <b>Currency:</b> <code>{result['currency'] or 'N/A'}</code>
-• <b>Subscribable:</b> <code>{result['subscribable']}</code>
-• <b>Free Trial:</b> <code>{result['free_trial']}</code>
-• <b>Expiry:</b> <code>{expiry_display}</code>
-• <b>Active:</b> <code>✅ {result['active']}</code>
-• <b>Country:</b> <code>{country_display}</code>
+• Verified       : <b>{result['email_verified']}</b>
+• Created        : <b>{result['account_creation'] or 'N/A'}</b>
+• Plan           : <b>{result['plan']}</b>
+• Currency       : <b>{result['currency'] or 'N/A'}</b>
+• Subscribable   : <b>{result['subscribable']}</b>
+• Free Trial     : <b>{result['free_trial']}</b>
+• Expires In     : <b>{expiry_display}</b>
+• Active         : ✅ <b>{result['active']}</b>
+• Country        : <b>{country_display}</b>
 
 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 Channel: {CHANNEL_USERNAME}
