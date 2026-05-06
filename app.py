@@ -336,22 +336,22 @@ async def show_statistics_menu(query, context):
 🧵 <b>Threads:</b> <code>{limits['current_threads']} / {limits['max_threads']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
-✅ <b>Total Scans:</b> <code>{stats['total_scans']}</code>
-💎 <b>Total Hits:</b> <code>{stats['total_hits']}</code>
-❌ <b>Total Bad:</b> <code>{stats.get('total_free', 0)}</code>
-🎯 <b>Success Rate:</b> <code>{success_rate}%</code>
+✅ Total Scans: <code>{stats['total_scans']}</code>
+💎 Total Hits: <code>{stats['total_hits']}</code>
+❌ Total Bad: <code>{stats.get('total_free', 0)}</code>
+🎯 Success Rate: <code>{success_rate}%</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 <b>Today's Statistics:</b>
-📊 <b>Scans Used:</b> <code>{stats['today_scans']}</code>
-⏳ <b>Remaining:</b> <code>{limits['remaining_text']}</code>
-👥 <b>Referrals:</b> <code>{stats['referrals']}</code>
+📊 Today's Statistics:</b>
+📊 Scans Used: <code>{stats['today_scans']}</code>
+⏳ Remaining: <code>{limits['remaining_text']}</code>
+👥 Referrals: <code>{stats['referrals']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 <b>Rewards & Limits Details:</b>
-🎟️ <b>Claimed Codes:</b> <code>0</code>
-🎁 <b>Daily Reward Claimed Today:</b> <code>{'Yes' if stats['daily_reward_claimed'] else 'No'}</code>
-✨ <b>Daily Reward Lines (Active):</b> <code>{stats['daily_reward_lines']}</code>
-👥 <b>Referral Bonus Lines:</b> <code>+{stats['referral_bonus_lines']}</code>
-📦 <b>Base Plan Limit:</b> <code>{limits['base_limit_text']}</code>
+🎟️ Claimed Codes: <code>0</code>
+🎁 Daily Reward Claimed Today: <code>{'Yes' if stats['daily_reward_claimed'] else 'No'}</code>
+✨ Daily Reward Lines (Active): <code>{stats['daily_reward_lines']}</code>
+👥 Referral Bonus Lines: <code>+{stats['referral_bonus_lines']}</code>
+📦 Base Plan Limit: <code>{limits['base_limit_text']}</code>
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
@@ -935,7 +935,7 @@ async def handle_document(update: Update, context: CallbackContext):
 📁 <b>File:</b> <code>{document.file_name}</code>
 📊 <b>Processed:</b> <code>{completed}/{total}</code>
 🧵 <b>Threads:</b> <code>{user_threads}</code>
-📡 <b>Mode:</b> <code>{stats['mode']}</code>
+📡 Mode: <code>{stats['mode']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ <b>HITS:</b> <code>{hits_count}</code>
 ❌ <b>BAD:</b> <code>{bad_count}</code>
@@ -1029,7 +1029,7 @@ async def edit_to_main_menu(update_or_query, context):
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
-📡 <b>Mode:</b> <code>{stats['mode']}</code>
+📡 Mode: <code>{stats['mode']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
