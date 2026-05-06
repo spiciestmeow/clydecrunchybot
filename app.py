@@ -840,11 +840,13 @@ async def handle_message(update: Update, context: CallbackContext):
             )
             return
     else:
-        await update.message.reply_text(
+        warning = await update.message.reply_text(
             """🚧 You can only check accounts from the home dashboard.""",
             parse_mode='HTML'
         )
-
+        await asyncio.sleep(3)
+        await warning.delete()
+        return
 
 async def handle_document(update: Update, context: CallbackContext):
     if not is_owner(update):
@@ -856,10 +858,12 @@ async def handle_document(update: Update, context: CallbackContext):
     is_on_main_menu = context.user_data.get('in_main_menu', False)
     
     if not is_on_main_menu:
-        await update.message.reply_text(
+        warning = await update.message.reply_text(
             """🚧 You can only check accounts from the home dashboard.""",
             parse_mode='HTML'
         )
+        await asyncio.sleep(3)
+        await warning.delete()
         return
     
     if not document.file_name.endswith('.txt'):
