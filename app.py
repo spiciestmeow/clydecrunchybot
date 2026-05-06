@@ -341,7 +341,7 @@ async def show_statistics_menu(query, context):
 ❌ Total Bad: <code>{stats.get('total_free', 0)}</code>
 🎯 Success Rate: <code>{success_rate}%</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Today's Statistics:</b>
+📊 <b>Today's Statistics:</b>
 📊 Scans Used: <code>{stats['today_scans']}</code>
 ⏳ Remaining: <code>{limits['remaining_text']}</code>
 👥 Referrals: <code>{stats['referrals']}</code>
