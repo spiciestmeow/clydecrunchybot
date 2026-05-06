@@ -777,9 +777,12 @@ async def handle_message(update: Update, context: CallbackContext):
         await process_thread_count_input(update, context)
         return
     
+    is_on_main_menu = context.user_data.get('in_main_menu', False)
+    looks_like_combo = ':' in text and '@' in text
+    
     # 🔥 NEW: Only trigger single checker when on the main dashboard
-    if context.user_data.get('in_main_menu', False) is True:
-        if ':' in text and '@' in text:
+    if is_on_main_menu:
+        if looks_like_combo:
 
             parts = text.split(':', 1)
             email = parts[0].strip()
@@ -823,19 +826,29 @@ async def handle_message(update: Update, context: CallbackContext):
                 "today_scans": stats["today_scans"] + 1
             })
             return
+        else:
+            await update.message.reply_text(
+                """❌ <b>Invalid Format!</b>
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Send like this:
+    <code>email:password</code>
+    <b>Example:</b>
+    <code>user@example.com:supersecret123</code>
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    💡 You can also send a <b>.txt file</b> with multiple accounts (one per line).""",
+                parse_mode='HTML'
+            )
+            return
     else:
-
         await update.message.reply_text(
-            """❌ <b>Invalid Format!</b>
+            """🔙 <b>Please return to the Main Menu first</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Send like this:
-<code>email:password</code>
-<b>Example:</b>
-<code>user@example.com:supersecret123</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 You can also send a <b>.txt file</b> with multiple accounts (one per line).""",
+You can only check accounts from the home dashboard.
+
+Tap the <b>🔙 Back</b> button or send /start.""",
             parse_mode='HTML'
         )
+
 
 async def handle_document(update: Update, context: CallbackContext):
     if not is_owner(update):
