@@ -855,6 +855,20 @@ async def handle_document(update: Update, context: CallbackContext):
         return
     
     document = update.message.document
+
+    # Check if user is on the main dashboard
+    is_on_main_menu = context.user_data.get('in_main_menu', False)
+    
+    if not is_on_main_menu:
+        await update.message.reply_text(
+            """🔙 <b>Please return to the Main Menu first</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You can only check accounts from the home dashboard.
+
+Tap the <b>🔙 Back</b> button or send /start.""",
+            parse_mode='HTML'
+        )
+        return
     
     if not document.file_name.endswith('.txt'):
         await update.message.reply_text("❌ Please send a .txt file only!", parse_mode='HTML')
