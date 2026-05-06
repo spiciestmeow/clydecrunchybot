@@ -405,7 +405,6 @@ async def set_plan_command(update: Update, context: CallbackContext):
 
     # Determine target and plan
     if len(args) == 1:
-        # /setplan VIP  → self
         target_user_id = ADMIN_ID
         new_plan = args[0].strip().upper()
     elif len(args) == 2:
@@ -413,15 +412,13 @@ async def set_plan_command(update: Update, context: CallbackContext):
         new_plan = args[1].strip().upper()
 
         if target.startswith('@'):
-            # By username
-            username = target[1:]  # remove @
+            username = target[1:]
             response = supabase.table("user_stats").select("user_id").eq("username", username).execute()
             if not response.data:
                 await update.message.reply_text(f"❌ User with username @{username} not found.")
                 return
             target_user_id = response.data[0]["user_id"]
         else:
-            # By user_id
             try:
                 target_user_id = int(target)
             except ValueError:
@@ -431,9 +428,17 @@ async def set_plan_command(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Wrong usage. Check /setplan for help.")
         return
 
-    if new_plan not in PLAN_DEFAULTS:
+    if new_plan not in ["FREE", "BASIC", "VIP"]:
         await update.message.reply_text("❌ Invalid plan! Use: FREE, BASIC, or VIP")
         return
+
+    # ←←← FIXED: Always calculate fresh expiry date here
+    if new_plan == "FREE":
+        expires = "N/A"
+    elif new_plan == "BASIC":
+        expires = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
+    else:  # VIP
+        expires = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
 
     defaults = PLAN_DEFAULTS[new_plan]
 
@@ -441,7 +446,7 @@ async def set_plan_command(update: Update, context: CallbackContext):
         "plan": defaults["plan"],
         "base_plan_limit": defaults["base_plan_limit"],
         "threads": defaults["threads"],
-        "expires": defaults["expires"],
+        "expires": expires,                    # ← Fresh date every time
         "daily_reward_lines": 0,
         "referral_bonus_lines": 0
     }
@@ -454,7 +459,7 @@ async def set_plan_command(update: Update, context: CallbackContext):
             f"👤 Target User: <code>{target_user_id}</code>\n"
             f"📌 New Plan: <b>{new_plan}</b>\n"
             f"🧵 Threads: <b>{defaults['threads']}</b>\n"
-            f"📆 Expires: <b>{defaults['expires']}</b>\n\n"
+            f"📆 Expires: <b>{expires}</b>\n\n"
             f"Changes are live immediately.",
             parse_mode='HTML'
         )
