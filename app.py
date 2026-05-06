@@ -330,8 +330,8 @@ async def show_statistics_menu(query, context):
 👤 <b>User ID:</b> <code>{stats['user_id']}</code>
 📅 <b>Registered:</b> <code>{stats['registered']}</code>
 👑 <b>Plan:</b> <code>{stats['plan']}</code>
-📆 <b>Plan Expires In:</b> <code>({get_days_remaining(stats['expires'])})</code>
-📡 <b>Mode:<code></b> {stats['mode']}</code>
+📆 <b>Plan Expires In:</b> <code>{get_days_remaining(stats['expires'])}</code>
+📡 <b>Mode:</b> <code>{stats['mode']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <code>{limits['current_threads']} / {limits['max_threads']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -935,7 +935,7 @@ async def handle_document(update: Update, context: CallbackContext):
 📁 <b>File:</b> <code>{document.file_name}</code>
 📊 <b>Processed:</b> <code>{completed}/{total}</code>
 🧵 <b>Threads:</b> <code>{user_threads}</code>
-📡 <b>Mode:</b> <code>Crunchyroll Check</code>
+📡 <b>Mode:</b> <code>{stats['mode']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ <b>HITS:</b> <code>{hits_count}</code>
 ❌ <b>BAD:</b> <code>{bad_count}</code>
@@ -1029,7 +1029,7 @@ async def edit_to_main_menu(update_or_query, context):
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
-📡 Mode: <code><b>Crunchyroll Check</b></code>
+📡 <b>Mode:</b> <code>{stats['mode']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
