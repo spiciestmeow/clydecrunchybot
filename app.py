@@ -558,6 +558,10 @@ def format_single_result(result):
     country_display = f"{country_name} {flag}"
 
     if result['success']:
+        # Use your existing get_days_remaining function
+        expiry_display = get_days_remaining(result['expiry']) if result['expiry'] else 'N/A'
+
+    if result['success']:
         return f"""
 ✅ <b>HIT FOUND!</b>
 
@@ -571,7 +575,7 @@ def format_single_result(result):
 • <b>Currency:</b> <code>{result['currency'] or 'N/A'}</code>
 • <b>Subscribable:</b> <code>{result['subscribable']}</code>
 • <b>Free Trial:</b> <code>{result['free_trial']}</code>
-• <b>Expiry:</b> <code>{result['expiry'] or 'N/A'}</code>
+• <b>Expiry:</b> <code>{expiry_display}</code>
 • <b>Active:</b> <code>✅ {result['active']}</code>
 • <b>Country:</b> <code>{country_display}</code>
 
