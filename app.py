@@ -328,7 +328,7 @@ async def show_statistics_menu(query, context):
 📊 <b>Your Statistics</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👤 <b>User ID:</b> <code>{stats['user_id']}</code>
-📅 <b>Registered:<code></b> {stats['registered']}</code>
+📅 <b>Registered:</b> <code>{stats['registered']}</code>
 👑 <b>Plan:<code></b> {stats['plan']}</code>
 📆 <b>Plan Expires In:<code></b> {stats['expires']} <b>({get_days_remaining(stats['expires'])})</b></code>
 📡 <b>Mode:<code></b> {stats['mode']}</code>
