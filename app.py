@@ -841,11 +841,7 @@ async def handle_message(update: Update, context: CallbackContext):
             return
     else:
         await update.message.reply_text(
-            """🔙 <b>Please return to the Main Menu first</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-You can only check accounts from the home dashboard.
-
-Tap the <b>🔙 Back</b> button or send /start.""",
+            """🚧 You can only check accounts from the home dashboard.""",
             parse_mode='HTML'
         )
 
@@ -861,11 +857,7 @@ async def handle_document(update: Update, context: CallbackContext):
     
     if not is_on_main_menu:
         await update.message.reply_text(
-            """🔙 <b>Please return to the Main Menu first</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-You can only check accounts from the home dashboard.
-
-Tap the <b>🔙 Back</b> button or send /start.""",
+            """🚧 You can only check accounts from the home dashboard.""",
             parse_mode='HTML'
         )
         return
