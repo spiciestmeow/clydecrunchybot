@@ -330,10 +330,10 @@ async def show_statistics_menu(query, context):
 👤 <b>User ID:</b> <code>{stats['user_id']}</code>
 📅 <b>Registered:</b> <code>{stats['registered']}</code>
 👑 <b>Plan:</b> <code>{stats['plan']}</code>
-📆 <b>Plan Expires In:</b> <code>{stats['expires']} <b>({get_days_remaining(stats['expires'])})</b></code>
+📆 <b>Plan Expires In:</b> <code>({get_days_remaining(stats['expires'])})</code>
 📡 <b>Mode:<code></b> {stats['mode']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🧵 <b>Threads:</b> <code><b>{limits['current_threads']} / {limits['max_threads']}</b></code>
+🧵 <b>Threads:</b> <code>{limits['current_threads']} / {limits['max_threads']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ <b>Total Scans:</b> <code>{stats['total_scans']}</code>
