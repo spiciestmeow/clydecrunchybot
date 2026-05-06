@@ -1027,7 +1027,7 @@ async def edit_to_main_menu(update_or_query, context):
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
 👑 Plan: <code><b>{limits['display_name']}</b></code>
-📅 Days Left: <b>{stats['expires']}</b>
+📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
 📡 Mode: <code><b>Crunchyroll Check</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
