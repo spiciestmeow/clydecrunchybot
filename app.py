@@ -377,7 +377,7 @@ async def show_referrals_menu(query, context):
     bonus_per = get_referral_bonus_per_referral(stats.get('plan', 'FREE'))
     total_bonus = referral_count * bonus_per
     
-    bot_username = "clydecrunchybot"   # ← CHANGE THIS TO YOUR ACTUAL BOT USERNAME
+    bot_username = "clydecrunchybot"   # ← Change to your real bot username
     referral_link = f"https://t.me/{bot_username}?start={stats['referral_code']}"
     
     text = f"""
@@ -391,7 +391,7 @@ async def show_referrals_menu(query, context):
 🎁 <b>Earn +{bonus_per} lines for each referral!</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔗 <b>Your Referral Link:</b>
-<code>{referral_link}</code>
+{referral_link}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <i>📤 Share this link with your friends!</i>
 Your daily limit increases by {bonus_per} lines for each person who registers using your link.
@@ -410,7 +410,7 @@ Your daily limit increases by {bonus_per} lines for each person who registers us
         text,
         parse_mode='HTML',
         reply_markup=reply_markup,
-        disable_web_page_preview=True
+        disable_web_page_preview=False
     )
 
 async def show_support_menu(query, context):
