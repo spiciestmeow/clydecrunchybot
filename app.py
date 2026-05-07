@@ -642,7 +642,7 @@ async def show_settings_menu(query, context):
 Configure your bot preferences below:
 
 🧵 <b>Threads</b>: Control scan speed
-Current: <b>{limits['current_threads']} threads</b> (Max: {limits['max_threads']})
+Current: <code>{limits['current_threads']} threads</code> (Max: {limits['max_threads']})
 
 🔌 <b>API Mode</b>: Select scanning method
 Current: <code>{get_mode_display(stats.get('api_mode'))}</code>
