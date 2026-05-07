@@ -265,7 +265,7 @@ async def show_support_menu(query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Need help or want to upgrade?
 
-— Contact: <b>@caydigitals</b>
+— Contact: <a href="https://t.me/caydigitals">@caydigitals</a>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <a href="https://t.me/caydigitals">Telegram</a>
 """.strip()
