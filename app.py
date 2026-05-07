@@ -922,8 +922,8 @@ def check_crunchyroll(email, password, proxy=None):
                 "username": email,
                 "password": password,
                 "scope": "offline_access",
-                "client_id": "cisobxghnlkmdsjohfjo",
-                "client_secret": "aWHXDdm951ZE47r0tTu4zJjzh84LyEaF",
+                "client_id": "y2arvjb0h0rgvtizlovy",
+                "client_secret": "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2",
                 "device_type": "BotChecker",
                 "device_id": device_id,
                 "device_name": "CrunchyBot"
