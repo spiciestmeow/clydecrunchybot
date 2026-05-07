@@ -1250,13 +1250,11 @@ async def manage_result_pin(update: Update, context: CallbackContext, message_id
 
 async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    await query.answer()
+    data = query.data
 
     if not is_owner(update):
         await query.edit_message_text("❌ Access Denied.")
         return
-
-    data = query.data
 
     if data == "menu_stats":
             context.user_data['in_main_menu'] = False
