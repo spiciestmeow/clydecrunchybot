@@ -1089,11 +1089,19 @@ async def handle_document(update: Update, context: CallbackContext):
         hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
         with open(hits_file, "w", encoding="utf-8") as f:
             f.write(hits_text)
+
+        fancy_caption = f"""
+👍 <b>{hits_count}x Crunchyroll Hits</b>
+────────────────────────────
+☰ BY @caydigitals ✅
+────────────────────────────
+<a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/caydigitals">Admin</a>
+        """.strip()
         
         await update.message.reply_document(
             document=open(hits_file, "rb"),
-            filename=f"cay_crunchy_hits_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-            caption=f"✅ <b>HIT Accounts Found!</b>\n🎯 |<b>Total Hits: <code>{hits_count}</code></b>",
+            filename=f"Crunchyroll Hits @caydigitals.txt",
+            caption=fancy_caption,
             parse_mode='HTML'
         )
 
