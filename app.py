@@ -30,17 +30,6 @@ TIMEOUT = 30
 
 # ============= API MODES CONFIG (dynamic like the Netflix screenshot) =============
 MODES = {
-    "Netflix": {
-        "display": "Netflix Mode",
-        "icon": "🔴",
-        "color": "🔴",
-        "features": [
-            "Checks Netflix linked accounts",
-            "Extracts Netflix plan details",
-            "Detects Valid and Email Changed",
-            "Saves results in ZIP file"
-        ]
-    },
     "Crunchyroll": {
         "display": "Crunchyroll Mode",
         "icon": "🍥",
@@ -54,13 +43,6 @@ MODES = {
             "Saves detailed results in TXT files"
         ]
     },
-    "Xbox": {"display": "Xbox Mode", "icon": "🎮", "color": "🎮", "features": ["Coming soon..."]},
-    "Roblox": {"display": "Roblox Mode", "icon": "🟥", "color": "🟥", "features": ["Coming soon..."]},
-    "PSN": {"display": "PSN Mode", "icon": "🔷", "color": "🔷", "features": ["Coming soon..."]},
-    "PSN_V2": {"display": "PSN Mode V2", "icon": "🔷", "color": "🔷", "features": ["Coming soon..."]},
-    "Supercell": {"display": "Supercell Mode", "icon": "⚔️", "color": "⚔️", "features": ["Coming soon..."]},
-    "Speed": {"display": "Speed Mode", "icon": "⚡", "color": "⚡", "features": ["Coming soon..."]},
-    "AllInOne": {"display": "ALL IN ONE", "icon": "🌐", "color": "🌐", "features": ["Coming soon..."]}
 }
 
 # ============= PLAN CONFIG (exactly from your screenshot) =============
@@ -1312,7 +1294,7 @@ async def button_callback(update: Update, context: CallbackContext):
         current_mode = stats.get("api_mode", "Crunchyroll")
 
         if new_mode == current_mode:
-            await query.answer("ℹ️ Already in this mode", show_alert=True)
+            await query.answer("ℹ️ Already in this mode", show_alert=False)
             return
 
         # Update BOTH columns in database
@@ -1321,7 +1303,7 @@ async def button_callback(update: Update, context: CallbackContext):
             "mode": new_mode
         })
 
-        await query.answer(f"✅ Switched to {new_mode} Mode!", show_alert=True)
+        await query.answer(f"✅ Switched to {new_mode} Mode!", show_alert=False)
         await show_api_mode_menu(query, context)
     
     elif data == "back_to_main":
