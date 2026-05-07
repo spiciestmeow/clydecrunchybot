@@ -310,6 +310,77 @@ async def show_support_menu(query, context):
         # Just leave it out — default is False, which enables the preview
     )
 
+
+async def show_rewards_menu(query, context):
+    context.user_data['in_main_menu'] = False
+    """Rewards & Gifts Hub — exactly like your screenshot"""
+    
+    stats = get_user_stats()
+    today = date.today()
+    
+    # Check if already claimed today
+    last_claimed = stats.get('daily_reward_last_claimed')
+    can_claim = not last_claimed or last_claimed != today
+    
+    status_text = (
+        "🟢 <b>Ready to Claim!</b>" if can_claim 
+        else "🔴 Claimed today — come back tomorrow!"
+    )
+    
+    text = f"""
+🎁 <b>Rewards & Gifts Hub</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Claim your daily free lines or redeem premium gift codes provided by the admin.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 <b>Your Daily Statistics:</b>
+⏰ Next Reward In: <code>{status_text}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    """.strip()
+
+    keyboard = [
+        [InlineKeyboardButton("🎁 Claim Daily Reward", callback_data="claim_daily_reward")],
+        [InlineKeyboardButton("📦 REDEEM GIFT CODE", callback_data="redeem_gift_code")],
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        text,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+
+async def claim_daily_reward(query, context):
+    """Handles daily reward claim"""
+    stats = get_user_stats()
+    today = date.today()
+    
+    last_claimed = stats.get('daily_reward_last_claimed')
+    
+    if last_claimed == today:
+        await query.answer("❌ You already claimed today's reward!", show_alert=True)
+        await show_rewards_menu(query, context)
+        return
+    
+    # Generate random reward (400-1200 lines)
+    import random
+    reward_amount = random.randint(400, 1200)
+    
+    new_lines = stats.get('daily_reward_lines', 0) + reward_amount
+    
+    update_user_stats({
+        "daily_reward_lines": new_lines,
+        "daily_reward_claimed": True,
+        "daily_reward_last_claimed": today
+    })
+    
+    await query.answer(f"🎉 +{reward_amount} lines added!", show_alert=True)
+    
+    # Refresh the rewards menu
+    await show_rewards_menu(query, context)
+
 # ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
 async def show_membership_menu(query, context):
     context.user_data['in_main_menu'] = False
@@ -515,7 +586,7 @@ Current: <code>{get_mode_display(stats.get('api_mode'))}</code>
     keyboard = [
         [
             InlineKeyboardButton("🧵 Set Threads", callback_data="set_threads"),
-            InlineKeyboardButton("🔌 API Mode", callback_data="set_api_mode"),
+            InlineKeyboardButton("📡 API Mode", callback_data="set_api_mode"),
         ],
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
     ]
@@ -1276,8 +1347,14 @@ async def button_callback(update: Update, context: CallbackContext):
     
     elif data == "menu_rewards":
         context.user_data['in_main_menu'] = False
-        text = "<b>🎁 Rewards & Gifts</b>\n\nNo rewards available yet.\nKeep using the bot to earn!"
-        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
+        await show_rewards_menu(query, context)
+
+    elif data == "claim_daily_reward":
+        await claim_daily_reward(query, context)
+
+    elif data == "redeem_gift_code":
+        await query.answer("📦 Gift code redemption coming soon!", show_alert=True)
+        await show_rewards_menu(query, context)
     
     elif data == "menu_membership":
         context.user_data['in_main_menu'] = False
