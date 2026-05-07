@@ -509,6 +509,38 @@ async def show_statistics_menu(query, context):
 
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
 
+async def reset_reward_command(update: Update, context: CallbackContext):
+    """Admin command to reset daily reward timer for yourself or any user"""
+    if not is_owner(update):
+        await update.message.reply_text("❌ This command is only for the owner.")
+        return
+
+    args = context.args
+    target_user_id = ADMIN_ID  # default = yourself
+
+    if args:
+        try:
+            target_user_id = int(args[0])
+        except ValueError:
+            await update.message.reply_text("❌ Invalid user ID. Use: `/resetreward` or `/resetreward 1234567890`")
+            return
+
+    # Reset reward data
+    success = update_user_stats_general(target_user_id, {
+        "daily_reward_lines": 0,
+        "daily_reward_claimed": False,
+        "daily_reward_last_claimed": None
+    })
+
+    if success:
+        await update.message.reply_text(
+            f"✅ Daily reward timer has been **reset** for user <code>{target_user_id}</code>.\n"
+            "They can now claim again immediately.",
+            parse_mode='HTML'
+        )
+    else:
+        await update.message.reply_text(f"❌ User {target_user_id} not found or never used the bot.")
+
 async def set_plan_command(update: Update, context: CallbackContext):
     if not is_owner(update):
         await update.message.reply_text("❌ This command is only for the owner.")
@@ -1434,6 +1466,7 @@ async def button_callback(update: Update, context: CallbackContext):
 # Register handlers
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("setplan", set_plan_command))
+tg_app.add_handler(CommandHandler("resetreward", reset_reward_command))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 tg_app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
 tg_app.add_handler(CallbackQueryHandler(button_callback))
