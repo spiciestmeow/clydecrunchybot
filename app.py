@@ -3,6 +3,8 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 import os
 import time
+import string
+import random
 import uuid
 import requests
 import random
@@ -88,6 +90,23 @@ def get_remaining_reward_time(stats: dict) -> str:
         return f"⏳ <code>{hours:02d}:{minutes:02d}:{seconds:02d}</code>"
     except:
         return "🟢 <b>Ready to Claim!</b>"
+
+def generate_referral_code(user_id: int) -> str:
+    """Auto-generate nice referral code like CAY73994"""
+    prefix = "CAY"
+    suffix = str(user_id % 100000).zfill(5)  # last 5 digits
+    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=3))
+    return f"{prefix}{suffix}{random_part}"[:12]
+
+def get_referral_bonus_per_referral(plan: str) -> int:
+    """Dynamic bonus per referral based on plan"""
+    plan = plan.upper()
+    if plan == "VIP":
+        return 1000
+    elif plan == "BASIC":
+        return 500
+    else:  # FREE
+        return 300
 
 # ============= GLOBAL MODE DISPLAY HELPER (clean & future-proof) =============
 def get_mode_display(mode_key: str = None) -> str:
@@ -201,12 +220,16 @@ def get_plan_limits(stats: dict):
     
     base_limit = config["daily_limit"]
     
-    # Only add daily reward bonus if the 24h timer is still active
+    # Add bonuses (daily reward + referral)
     daily_reward_lines = stats.get("daily_reward_lines", 0)
     if not is_daily_reward_active(stats):
-        daily_reward_lines = 0  # expired
+        daily_reward_lines = 0
     
-    bonus_lines = daily_reward_lines + stats.get("referral_bonus_lines", 0)
+    # Dynamic referral bonus
+    referral_bonus_per = get_referral_bonus_per_referral(stats.get("plan", "FREE"))
+    total_referral_bonus = stats.get("referrals", 0) * referral_bonus_per
+    
+    bonus_lines = daily_reward_lines + total_referral_bonus
     
     if base_limit is None:  # VIP = unlimited
         daily_limit = None
@@ -296,7 +319,7 @@ def get_user_stats():
         "today_date": str(date.today()),
         "today_scans": 0,
         "referrals": 0,
-        "referral_code": None,
+        "referral_code": stats.get("referral_code") or generate_referral_code(ADMIN_ID),
         "referred_by": None,
         "daily_reward_claimed": False,
         "daily_reward_last_claimed": None,
@@ -333,17 +356,22 @@ def update_user_stats_general(user_id: int, data: dict):
 
 async def show_referrals_menu(query, context):
     context.user_data['in_main_menu'] = False
-    """My Referrals — exactly like the screenshot"""
     
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     
-    referral_count = stats.get('referrals', 0)
-    bonus_lines = stats.get('referral_bonus_lines', 0)
+    # Auto-generate referral code if missing
+    if not stats.get('referral_code'):
+        new_code = generate_referral_code(stats['user_id'])
+        update_user_stats({"referral_code": new_code})
+        stats['referral_code'] = new_code
     
-    # Generate referral link (replace with your actual bot username if needed)
-    bot_username = "clydecrunchybot"   # ← Change this to your bot's username
-    referral_link = f"https://t.me/{bot_username}?start={stats.get('referral_code', stats['user_id'])}"
+    referral_count = stats.get('referrals', 0)
+    bonus_per = get_referral_bonus_per_referral(stats.get('plan', 'FREE'))
+    total_bonus = referral_count * bonus_per
+    
+    bot_username = "clydecrunchybot"   # ← CHANGE THIS TO YOUR ACTUAL BOT USERNAME
+    referral_link = f"https://t.me/{bot_username}?start={stats['referral_code']}"
     
     text = f"""
 🔗 <b>My Referrals</b>
@@ -351,29 +379,24 @@ async def show_referrals_menu(query, context):
 📊 <b>Your Statistics:</b>
 ✅ Referral Count: <b>{referral_count}</b>
 📈 Your Daily Limit: <b>{limits['remaining_text']}</b>
-💰 Bonus: <b>+{bonus_lines} lines</b>
+💰 Bonus: <b>+{total_bonus} lines</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎁 <b>Earn +500 lines for each referral!</b>
+🎁 <b>Earn +{bonus_per} lines for each referral!</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔗 <b>Your Referral Link:</b>
 <code>{referral_link}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <i>📤 Share this link with your friends!</i>
-Your daily limit increases by 500 lines for each person who registers using your link.
+Your daily limit increases by {bonus_per} lines for each person who registers using your link.
 
 💡 <b>Example:</b>
-• 0 referrals = 5000 lines/day
-• 1 referral = 5500 lines/day
-• 5 referrals = 7500 lines/day
-• 10 referrals = 10000 lines/day
+• 0 referrals = {limits['base_limit_text']} lines/day
+• 1 referral = {int(str(limits['base_limit_text']).replace(',','')) + bonus_per} lines/day
+• 5 referrals = {int(str(limits['base_limit_text']).replace(',','')) + 5*bonus_per} lines/day
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
-    # Telegram promo (like in the screenshot)
-    keyboard = [
-        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
-    ]
-    
+    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(
