@@ -45,7 +45,7 @@ MODES = {
     },
 }
 
-# ============= DAILY REWARD TIMER HELPER =============
+# ============= DAILY REWARD TIMER HELPER (Fixed - uses UTC) =============
 def is_daily_reward_active(stats: dict) -> bool:
     """Returns True if the 24-hour reward timer is still active"""
     last_claimed = stats.get('daily_reward_last_claimed')
@@ -53,11 +53,14 @@ def is_daily_reward_active(stats: dict) -> bool:
         return False
     
     try:
-        # Handle both string and datetime
         if isinstance(last_claimed, str):
-            last_claimed = datetime.fromisoformat(last_claimed.replace('Z', '+00:00'))
-        now = datetime.now(last_claimed.tzinfo) if hasattr(last_claimed, 'tzinfo') else datetime.now()
-        return (now - last_claimed).total_seconds() < 24 * 3600  # 24 hours
+            # Remove timezone info and treat as UTC
+            if 'Z' in last_claimed or '+' in last_claimed:
+                last_claimed = last_claimed.split('+')[0].split('Z')[0]
+            last_claimed = datetime.fromisoformat(last_claimed)
+        
+        now = datetime.utcnow()
+        return (now - last_claimed).total_seconds() < 24 * 3600
     except:
         return False
 
@@ -70,8 +73,11 @@ def get_remaining_reward_time(stats: dict) -> str:
     
     try:
         if isinstance(last_claimed, str):
-            last_claimed = datetime.fromisoformat(last_claimed.replace('Z', '+00:00'))
-        now = datetime.now()
+            if 'Z' in last_claimed or '+' in last_claimed:
+                last_claimed = last_claimed.split('+')[0].split('Z')[0]
+            last_claimed = datetime.fromisoformat(last_claimed)
+        
+        now = datetime.utcnow()
         remaining = last_claimed + timedelta(hours=24) - now
         
         if remaining.total_seconds() <= 0:
@@ -395,7 +401,7 @@ async def claim_daily_reward(query, context):
     update_user_stats({
         "daily_reward_lines": new_lines,
         "daily_reward_claimed": True,
-        "daily_reward_last_claimed": datetime.now().isoformat()   # full timestamp
+        "daily_reward_last_claimed": datetime.utcnow().isoformat()   # ← Use UTC
     })
     
     await query.answer(
@@ -493,7 +499,7 @@ async def show_statistics_menu(query, context):
 🎁 <b>Rewards & Limits Details:</b>
 🎟️ Claimed Codes: <code>0</code>
 🎁 Daily Reward Claimed Today: <code>{'Yes' if stats['daily_reward_claimed'] else 'No'}</code>
-✨ Daily Reward Lines (Active): <code>{stats['daily_reward_lines']}</code>
+✨ Daily Reward Lines (Active): <code>{stats['daily_reward_lines']}</code> {get_remaining_reward_time(stats) if is_daily_reward_active(stats) else ''}
 👥 Referral Bonus Lines: <code>+{stats['referral_bonus_lines']}</code>
 📦 Base Plan Limit: <code>{limits['base_limit_text']}</code>
     """.strip()
