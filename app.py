@@ -263,15 +263,11 @@ async def show_support_menu(query, context):
     
     text = """📞 <b>Support & Contact</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 Need help or want to upgrade?
 
 — Contact: <b>@caydigitals</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Telegram
-Cay
-Main Channel: https://t.me/+MfJaSNxdX5pjNzE9
+<a href="https://t.me/caydigitals">Telegram</a>
 """.strip()
 
     # Inline keyboard (Back button at the bottom, exactly like the screenshot)
