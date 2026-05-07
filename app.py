@@ -296,21 +296,28 @@ def get_user_stats():
     response = supabase.table("user_stats").select("*").eq("user_id", ADMIN_ID).execute()
     if response.data:
         stats = response.data[0]
+        
+        # Auto-generate referral code if missing (for existing users)
+        if not stats.get('referral_code'):
+            new_code = generate_referral_code(ADMIN_ID)
+            update_user_stats({"referral_code": new_code})
+            stats['referral_code'] = new_code
+        
         # Auto update last active
         update_user_stats({"last_active": datetime.now().isoformat()})
         return stats
     
-    # First time user - create row
+    # First time user - create row with referral code
     default = {
         "user_id": ADMIN_ID,
         "username": None,
         "first_name": None,
         "registered": str(date.today()),
         "last_active": datetime.now().isoformat(),
-        "plan": "FREE",                    # ← changed to FREE by default
+        "plan": "FREE",
         "expires": "N/A",
         "mode": "Crunchyroll",
-        "threads": 10,                     # FREE default
+        "threads": 10,
         "api_mode": "Crunchyroll",
         "total_scans": 0,
         "total_hits": 0,
@@ -319,7 +326,7 @@ def get_user_stats():
         "today_date": str(date.today()),
         "today_scans": 0,
         "referrals": 0,
-        "referral_code": stats.get("referral_code") or generate_referral_code(ADMIN_ID),
+        "referral_code": generate_referral_code(ADMIN_ID),   # ← Auto generate
         "referred_by": None,
         "daily_reward_claimed": False,
         "daily_reward_last_claimed": None,
