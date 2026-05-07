@@ -259,7 +259,7 @@ def update_user_stats_general(user_id: int, data: dict):
 
 async def show_support_menu(query, context):
     context.user_data['in_main_menu'] = False
-    """Replicates the exact Support & Contact page from the original screenshot"""
+    """Replicates the exact Support & Contact page with native preview card"""
     
     text = """📞 <b>Support & Contact</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -274,19 +274,18 @@ Cay
 Main Channel: https://t.me/+MfJaSNxdX5pjNzE9
 """.strip()
 
-    # Inline keyboard with the Back button
+    # Inline keyboard (Back button at the bottom, exactly like the screenshot)
     keyboard = [
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
     ]
-    
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(
-        text,
+        text=text,
         parse_mode='HTML',
         reply_markup=reply_markup
-        # ← IMPORTANT: We removed disable_web_page_preview=True
-        # This lets Telegram show the native channel preview card
+        # ← DO NOT add disable_web_page_preview=True (or False)
+        # Just leave it out — default is False, which enables the preview
     )
 
 # ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
