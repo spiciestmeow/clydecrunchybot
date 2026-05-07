@@ -28,6 +28,41 @@ SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
 
 TIMEOUT = 30
 
+# ============= API MODES CONFIG (dynamic like the Netflix screenshot) =============
+MODES = {
+    "Netflix": {
+        "display": "Netflix Mode",
+        "icon": "🔴",
+        "color": "🔴",
+        "features": [
+            "Checks Netflix linked accounts",
+            "Extracts Netflix plan details",
+            "Detects Valid and Email Changed",
+            "Saves results in ZIP file"
+        ]
+    },
+    "Crunchyroll": {
+        "display": "Crunchyroll Mode",
+        "icon": "🍥",
+        "color": "🍥",
+        "features": [
+            "Checks Crunchyroll linked accounts",
+            "Extracts account plan & status",
+            "Detects Active Subscription",
+            "Shows Email Verification",
+            "Detects Free Trial",
+            "Saves detailed results in TXT files"
+        ]
+    },
+    "Xbox": {"display": "Xbox Mode", "icon": "🎮", "color": "🎮", "features": ["Coming soon..."]},
+    "Roblox": {"display": "Roblox Mode", "icon": "🟥", "color": "🟥", "features": ["Coming soon..."]},
+    "PSN": {"display": "PSN Mode", "icon": "🔷", "color": "🔷", "features": ["Coming soon..."]},
+    "PSN_V2": {"display": "PSN Mode V2", "icon": "🔷", "color": "🔷", "features": ["Coming soon..."]},
+    "Supercell": {"display": "Supercell Mode", "icon": "⚔️", "color": "⚔️", "features": ["Coming soon..."]},
+    "Speed": {"display": "Speed Mode", "icon": "⚡", "color": "⚡", "features": ["Coming soon..."]},
+    "AllInOne": {"display": "ALL IN ONE", "icon": "🌐", "color": "🌐", "features": ["Coming soon..."]}
+}
+
 # ============= PLAN CONFIG (exactly from your screenshot) =============
 PLAN_CONFIG = {
     "FREE": {
@@ -480,7 +515,7 @@ Configure your bot preferences below:
 Current: <b>{limits['current_threads']} threads</b> (Max: {limits['max_threads']})
 
 🔌 <b>API Mode</b>: Select scanning method
-Current: <b>Crunchyroll</b>
+Current: <b>{stats.get('api_mode', 'Crunchyroll')}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Click a button to configure:</i>
     """.strip()
@@ -529,21 +564,52 @@ Send a number between 1 and {max_t} to set your thread count.
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
     context.user_data['waiting_for_threads'] = True
 
-async def handle_api_mode(query, context):
+async def show_api_mode_menu(query, context):
     context.user_data['in_main_menu'] = False
-    """Placeholder for API Mode (you can expand later without touching checker)"""
+    """Full dynamic API Mode Selection — exactly like your Netflix screenshot"""
+    
+    stats = get_user_stats()
+    current_mode = stats.get("api_mode", "Crunchyroll")
+    
+    mode_info = MODES.get(current_mode, MODES["Crunchyroll"])
+    
+    # Build feature list with green checks
+    features_text = "\n".join([f"✅ {feature}" for feature in mode_info["features"]])
+    
     text = f"""
-<b>API Mode</b>
+📡 <b>API Mode Selection</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{mode_info["icon"]} <b>{mode_info["display"]}</b>
+{features_text}
 
-Current scanning method: <b>Crunchyroll</b> ✅
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Current Mode: {mode_info["color"]} <b>{mode_info["display"]}</b>
 
-Other modes (Netflix, etc.) coming soon...
+Click on a mode below to switch:
     """.strip()
-    
-    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="menu_settings")]]
+
+    # Build 2-column grid
+    keyboard = []
+    row = []
+    for mode_key, info in MODES.items():
+        button_text = f"{info['color']} {info['display']}" if mode_key == current_mode else f"{info['icon']} {info['display']}"
+        row.append(InlineKeyboardButton(button_text, callback_data=f"set_mode:{mode_key}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    # Back button
+    keyboard.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
+
+    await query.edit_message_text(
+        text,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
 
 def format_single_result(result):
     """Returns nicely formatted HTML for single account check"""
@@ -794,7 +860,7 @@ async def start(update: Update, context: CallbackContext):
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
-📡 Mode: <code><b>Crunchyroll Check</b></code>
+📡 Mode: <code><b>{stats.get('api_mode', 'Crunchyroll')}</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
@@ -1052,7 +1118,7 @@ async def handle_document(update: Update, context: CallbackContext):
 📁 <b>File:</b> <code>{document.file_name}</code>
 📊 <b>Processed:</b> <code>{completed}/{total}</code>
 🧵 <b>Threads:</b> <code>{user_threads}</code>
-📡 Mode: <code>{stats['mode']}</code>
+📡 Mode: <code>{stats.get('api_mode', 'Crunchyroll')}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ <b>HITS:</b> <code>{hits_count}</code>
 ❌ <b>BAD:</b> <code>{bad_count}</code>
@@ -1166,7 +1232,7 @@ async def edit_to_main_menu(update_or_query, context):
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
-📡 Mode: <code>{stats['mode']}</code>
+📡 Mode: <code><b>{stats.get('api_mode', 'Crunchyroll')}</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
@@ -1238,7 +1304,25 @@ async def button_callback(update: Update, context: CallbackContext):
     
     elif data == "set_api_mode":
         context.user_data['in_main_menu'] = False
-        await handle_api_mode(query, context)
+        await show_api_mode_menu(query, context)
+
+    elif data.startswith("set_mode:"):
+        new_mode = data.split(":", 1)[1]
+        stats = get_user_stats()
+        current_mode = stats.get("api_mode", "Crunchyroll")
+
+        if new_mode == current_mode:
+            await query.answer("ℹ️ Already in this mode", show_alert=True)
+            return
+
+        # Update BOTH columns in database
+        update_user_stats({
+            "api_mode": new_mode,
+            "mode": new_mode
+        })
+
+        await query.answer(f"✅ Switched to {new_mode} Mode!", show_alert=True)
+        await show_api_mode_menu(query, context)
     
     elif data == "back_to_main":
         await edit_to_main_menu(update, context)
