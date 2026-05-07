@@ -45,6 +45,44 @@ MODES = {
     },
 }
 
+# ============= DAILY REWARD TIMER HELPER =============
+def is_daily_reward_active(stats: dict) -> bool:
+    """Returns True if the 24-hour reward timer is still active"""
+    last_claimed = stats.get('daily_reward_last_claimed')
+    if not last_claimed:
+        return False
+    
+    try:
+        # Handle both string and datetime
+        if isinstance(last_claimed, str):
+            last_claimed = datetime.fromisoformat(last_claimed.replace('Z', '+00:00'))
+        now = datetime.now(last_claimed.tzinfo) if hasattr(last_claimed, 'tzinfo') else datetime.now()
+        return (now - last_claimed).total_seconds() < 24 * 3600  # 24 hours
+    except:
+        return False
+
+
+def get_remaining_reward_time(stats: dict) -> str:
+    """Returns countdown like '23:45:12' or 'Ready to Claim!'"""
+    last_claimed = stats.get('daily_reward_last_claimed')
+    if not last_claimed:
+        return "🟢 <b>Ready to Claim!</b>"
+    
+    try:
+        if isinstance(last_claimed, str):
+            last_claimed = datetime.fromisoformat(last_claimed.replace('Z', '+00:00'))
+        now = datetime.now()
+        remaining = last_claimed + timedelta(hours=24) - now
+        
+        if remaining.total_seconds() <= 0:
+            return "🟢 <b>Ready to Claim!</b>"
+        
+        hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"⏳ <code>{hours:02d}:{minutes:02d}:{seconds:02d}</code>"
+    except:
+        return "🟢 <b>Ready to Claim!</b>"
+
 # ============= GLOBAL MODE DISPLAY HELPER (clean & future-proof) =============
 def get_mode_display(mode_key: str = None) -> str:
     """Returns formatted mode like '🍥 Crunchyroll Mode' with icon.
@@ -151,15 +189,18 @@ def get_days_remaining(expires_str: str) -> str:
         return expires_str
 
 def get_plan_limits(stats: dict):
-    """Returns dynamic limits based on user's plan + bonuses"""
+    """Returns dynamic limits — now respects 24h reward timer"""
     plan_key = stats.get("plan", "FREE").upper()
     config = PLAN_CONFIG.get(plan_key, PLAN_CONFIG["FREE"])
     
-    # Base daily limit from plan
     base_limit = config["daily_limit"]
     
-    # Add bonuses (daily reward + referral)
-    bonus_lines = stats.get("daily_reward_lines", 0) + stats.get("referral_bonus_lines", 0)
+    # Only add daily reward bonus if the 24h timer is still active
+    daily_reward_lines = stats.get("daily_reward_lines", 0)
+    if not is_daily_reward_active(stats):
+        daily_reward_lines = 0  # expired
+    
+    bonus_lines = daily_reward_lines + stats.get("referral_bonus_lines", 0)
     
     if base_limit is None:  # VIP = unlimited
         daily_limit = None
@@ -170,7 +211,7 @@ def get_plan_limits(stats: dict):
         today_used = stats.get("today_scans", 0)
         remaining = max(0, daily_limit - today_used)
         remaining_text = f"{remaining} / {daily_limit}"
-        base_limit_text = f"{base_limit:,}"   # e.g. 5,000 or 25,000
+        base_limit_text = f"{base_limit:,}"
     
     return {
         "display_name": config["display_name"],
@@ -312,25 +353,8 @@ async def show_support_menu(query, context):
 
 async def show_rewards_menu(query, context):
     context.user_data['in_main_menu'] = False
-    """Rewards & Gifts Hub — matches your friend's premium style"""
     
     stats = get_user_stats()
-    today = date.today()
-    
-    last_claimed = stats.get('daily_reward_last_claimed')
-    can_claim = not last_claimed or str(last_claimed) != str(today)
-    
-    if can_claim:
-        status_text = "🟢 <b>Ready to Claim!</b>"
-    else:
-        # Calculate countdown until next midnight
-        now = datetime.now()
-        tomorrow = datetime.combine(today + timedelta(days=1), datetime.min.time())
-        time_left = tomorrow - now
-        hours, remainder = divmod(time_left.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        timer = f"⏳ <code>{hours:02d}:{minutes:02d}:{seconds:02d}</code>"
-        status_text = f"🔴 Next Reward In: {timer}"
     
     text = f"""
 🎁 <b>Rewards & Gifts Hub</b>
@@ -338,7 +362,7 @@ async def show_rewards_menu(query, context):
 Claim your daily free lines or redeem premium gift codes provided by the admin.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Daily Statistics:</b>
-⏰ Next Reward In: <code>{status_text}</code>
+⏰ Next Reward In: {get_remaining_reward_time(stats)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
@@ -356,36 +380,29 @@ Claim your daily free lines or redeem premium gift codes provided by the admin.
         reply_markup=reply_markup
     )
 
-
 async def claim_daily_reward(query, context):
-    """Premium claim experience like your friend's bot"""
+    """Personal 24-hour reward timer"""
     stats = get_user_stats()
-    today = date.today()
     
-    last_claimed = stats.get('daily_reward_last_claimed')
-    
-    if last_claimed and str(last_claimed) == str(today):
-        await query.answer("❌ You already claimed today's reward!", show_alert=True)
+    if is_daily_reward_active(stats):
+        await query.answer("❌ Your previous reward is still active!", show_alert=True)
         await show_rewards_menu(query, context)
         return
     
-    # Random reward between 400-1200
     reward_amount = random.randint(400, 1200)
     new_lines = stats.get('daily_reward_lines', 0) + reward_amount
     
     update_user_stats({
         "daily_reward_lines": new_lines,
         "daily_reward_claimed": True,
-        "daily_reward_last_claimed": today.isoformat()
+        "daily_reward_last_claimed": datetime.now().isoformat()   # full timestamp
     })
     
-    # Beautiful congratulations popup (exactly like your friend's bot)
     await query.answer(
         f"🎉 Congratulations! You received +{reward_amount} lines (Valid for 24H).",
         show_alert=True
     )
     
-    # Refresh the page
     await show_rewards_menu(query, context)
 
 # ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
