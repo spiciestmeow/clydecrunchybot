@@ -1095,7 +1095,7 @@ async def handle_document(update: Update, context: CallbackContext):
 ────────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────────
-<a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/caydigitals">Admin</a>
+<a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/cayigitals">Admin</a>
         """.strip()
         
         await update.message.reply_document(
