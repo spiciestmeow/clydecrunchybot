@@ -361,19 +361,25 @@ async def show_rewards_menu(query, context):
     context.user_data['in_main_menu'] = False
     
     stats = get_user_stats()
+    is_active = is_daily_reward_active(stats)
     
+    if is_active:
+        claim_button_text = "⏳ Reward Active"
+    else:
+        claim_button_text = "🎁 Claim Daily Reward"
+
     text = f"""
 🎁 <b>Rewards & Gifts Hub</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Claim your daily free lines or redeem premium gift codes provided by the admin.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Daily Statistics:</b>
-⏰ Next Reward In: {get_remaining_reward_time(stats)}
+⏰ Next Reward In: <code>{get_remaining_reward_time(stats)}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
     keyboard = [
-        [InlineKeyboardButton("🎁 Claim Daily Reward", callback_data="claim_daily_reward")],
+        [InlineKeyboardButton(claim_button_text, callback_data="claim_daily_reward")],
         [InlineKeyboardButton("📦 REDEEM GIFT CODE", callback_data="redeem_gift_code")],
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
     ]
@@ -385,7 +391,6 @@ Claim your daily free lines or redeem premium gift codes provided by the admin.
         parse_mode='HTML',
         reply_markup=reply_markup
     )
-
 async def claim_daily_reward(query, context):
     """Personal 24-hour reward timer"""
     stats = get_user_stats()
