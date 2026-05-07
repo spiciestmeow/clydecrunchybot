@@ -310,28 +310,32 @@ async def show_support_menu(query, context):
         # Just leave it out — default is False, which enables the preview
     )
 
-
 async def show_rewards_menu(query, context):
     context.user_data['in_main_menu'] = False
-    """Rewards & Gifts Hub — exactly like your screenshot"""
+    """Rewards & Gifts Hub — matches your friend's premium style"""
     
     stats = get_user_stats()
     today = date.today()
     
-    # Check if already claimed today
     last_claimed = stats.get('daily_reward_last_claimed')
-    can_claim = not last_claimed or last_claimed != today
+    can_claim = not last_claimed or str(last_claimed) != str(today)
     
-    status_text = (
-        "🟢 <b>Ready to Claim!</b>" if can_claim 
-        else "🔴 Claimed today — come back tomorrow!"
-    )
+    if can_claim:
+        status_text = "🟢 <b>Ready to Claim!</b>"
+    else:
+        # Calculate countdown until next midnight
+        now = datetime.now()
+        tomorrow = datetime.combine(today + timedelta(days=1), datetime.min.time())
+        time_left = tomorrow - now
+        hours, remainder = divmod(time_left.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        timer = f"⏳ <code>{hours:02d}:{minutes:02d}:{seconds:02d}</code>"
+        status_text = f"🔴 Next Reward In: {timer}"
     
     text = f"""
 🎁 <b>Rewards & Gifts Hub</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Claim your daily free lines or redeem premium gift codes provided by the admin.
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Daily Statistics:</b>
 ⏰ Next Reward In: <code>{status_text}</code>
@@ -352,33 +356,36 @@ Claim your daily free lines or redeem premium gift codes provided by the admin.
         reply_markup=reply_markup
     )
 
+
 async def claim_daily_reward(query, context):
-    """Handles daily reward claim"""
+    """Premium claim experience like your friend's bot"""
     stats = get_user_stats()
     today = date.today()
     
     last_claimed = stats.get('daily_reward_last_claimed')
     
-    if last_claimed == today:
+    if last_claimed and str(last_claimed) == str(today):
         await query.answer("❌ You already claimed today's reward!", show_alert=True)
         await show_rewards_menu(query, context)
         return
     
-    # Generate random reward (400-1200 lines)
-    import random
+    # Random reward between 400-1200
     reward_amount = random.randint(400, 1200)
-    
     new_lines = stats.get('daily_reward_lines', 0) + reward_amount
     
     update_user_stats({
         "daily_reward_lines": new_lines,
         "daily_reward_claimed": True,
-        "daily_reward_last_claimed": today
+        "daily_reward_last_claimed": today.isoformat()
     })
     
-    await query.answer(f"🎉 +{reward_amount} lines added!", show_alert=True)
+    # Beautiful congratulations popup (exactly like your friend's bot)
+    await query.answer(
+        f"🎉 Congratulations! You received +{reward_amount} lines (Valid for 24H).",
+        show_alert=True
+    )
     
-    # Refresh the rewards menu
+    # Refresh the page
     await show_rewards_menu(query, context)
 
 # ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
