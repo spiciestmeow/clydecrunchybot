@@ -259,22 +259,22 @@ def update_user_stats_general(user_id: int, data: dict):
 
 async def show_support_menu(query, context):
     context.user_data['in_main_menu'] = False
-    """Replicates the exact Support & Contact page from your screenshot"""
+    """Replicates the exact Support & Contact page from the original screenshot"""
     
-    text = f"""
-📞 <b>Support & Contact</b>
+    text = """📞 <b>Support & Contact</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 Need help or want to upgrade?
 
 — Contact: <b>@caydigitals</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-<a href="https://t.me/caydigitals"><b>Telegram</b></a>
+Telegram
 Cay
 Main Channel: https://t.me/+MfJaSNxdX5pjNzE9
-    """.strip()
+""".strip()
 
-    # Inline button that opens direct chat with @caydigitals
+    # Inline keyboard with the Back button
     keyboard = [
         [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
     ]
@@ -282,10 +282,11 @@ Main Channel: https://t.me/+MfJaSNxdX5pjNzE9
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(
-        text, 
-        parse_mode='HTML', 
-        reply_markup=reply_markup,
-        disable_web_page_preview=True
+        text,
+        parse_mode='HTML',
+        reply_markup=reply_markup
+        # ← IMPORTANT: We removed disable_web_page_preview=True
+        # This lets Telegram show the native channel preview card
     )
 
 # ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
