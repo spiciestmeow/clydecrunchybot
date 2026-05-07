@@ -401,7 +401,7 @@ async def claim_daily_reward(query, context):
     update_user_stats({
         "daily_reward_lines": new_lines,
         "daily_reward_claimed": True,
-        "daily_reward_last_claimed": datetime.utcnow().isoformat()   # ← Use UTC
+        "daily_reward_last_claimed": datetime.utcnow().isoformat()   # full timestamp
     })
     
     await query.answer(
@@ -534,7 +534,7 @@ async def reset_reward_command(update: Update, context: CallbackContext):
 
     if success:
         await update.message.reply_text(
-            f"✅ Daily reward timer has been **reset** for user <code>{target_user_id}</code>.\n"
+            f"✅ Daily reward timer has been <b>reset</b> for user <code>{target_user_id}</code>.\n"
             "They can now claim again immediately.",
             parse_mode='HTML'
         )
