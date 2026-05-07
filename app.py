@@ -331,6 +331,58 @@ def update_user_stats_general(user_id: int, data: dict):
     response = supabase.table("user_stats").update(data).eq("user_id", user_id).execute()
     return len(response.data) > 0  # True if row was updated
 
+async def show_referrals_menu(query, context):
+    context.user_data['in_main_menu'] = False
+    """My Referrals — exactly like the screenshot"""
+    
+    stats = get_user_stats()
+    limits = get_plan_limits(stats)
+    
+    referral_count = stats.get('referrals', 0)
+    bonus_lines = stats.get('referral_bonus_lines', 0)
+    
+    # Generate referral link (replace with your actual bot username if needed)
+    bot_username = "clydecrunchybot"   # ← Change this to your bot's username
+    referral_link = f"https://t.me/{bot_username}?start={stats.get('referral_code', stats['user_id'])}"
+    
+    text = f"""
+🔗 <b>My Referrals</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 <b>Your Statistics:</b>
+✅ Referral Count: <b>{referral_count}</b>
+📈 Your Daily Limit: <b>{limits['remaining_text']}</b>
+💰 Bonus: <b>+{bonus_lines} lines</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎁 <b>Earn +500 lines for each referral!</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔗 <b>Your Referral Link:</b>
+<code>{referral_link}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+<i>📤 Share this link with your friends!</i>
+Your daily limit increases by 500 lines for each person who registers using your link.
+
+💡 <b>Example:</b>
+• 0 referrals = 5000 lines/day
+• 1 referral = 5500 lines/day
+• 5 referrals = 7500 lines/day
+• 10 referrals = 10000 lines/day
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    """.strip()
+
+    # Telegram promo (like in the screenshot)
+    keyboard = [
+        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await query.edit_message_text(
+        text,
+        parse_mode='HTML',
+        reply_markup=reply_markup,
+        disable_web_page_preview=True
+    )
+
 async def show_support_menu(query, context):
     context.user_data['in_main_menu'] = False
     """Replicates the exact Support & Contact page with native preview card"""
@@ -1409,8 +1461,7 @@ async def button_callback(update: Update, context: CallbackContext):
     
     elif data == "menu_referrals":
         context.user_data['in_main_menu'] = False
-        text = "<b>🔗 My Referrals</b>\n\nYour referral link:\n<code>https://t.me/yourbot?start=ref123</code>\n\nReferrals: 0"
-        await query.edit_message_text(text, parse_mode='HTML', reply_markup=query.message.reply_markup)
+        await show_referrals_menu(query, context)
     
     elif data == "menu_rewards":
         context.user_data['in_main_menu'] = False
