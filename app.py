@@ -1097,6 +1097,14 @@ async def handle_document(update: Update, context: CallbackContext):
 ────────────────────────────
 <a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/cayigitals">Admin</a>
         """.strip()
+
+        bad_caption = f"""
+👍 <b>{bad_caption}x Crunchyroll Hits</b>
+────────────────────────────
+☰ BY @caydigitals ✅
+────────────────────────────
+<a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/cayigitals">Admin</a>
+        """.strip()
         
         await update.message.reply_document(
             document=open(hits_file, "rb"),
@@ -1119,8 +1127,8 @@ async def handle_document(update: Update, context: CallbackContext):
         
         await update.message.reply_document(
             document=open(bad_file, "rb"),
-            filename=f"crunchy_bad_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
-            caption=f"❌ <b>{bad_count} BAD accounts</b>\nTotal checked: {total}",
+            filename=f"Crunchyroll Bad @caydigitals.txt",
+            caption=bad_caption,
             parse_mode='HTML'
         )
 
