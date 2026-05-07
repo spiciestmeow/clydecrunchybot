@@ -45,6 +45,16 @@ MODES = {
     },
 }
 
+# ============= GLOBAL MODE DISPLAY HELPER (clean & future-proof) =============
+def get_mode_display(mode_key: str = None) -> str:
+    """Returns formatted mode like '🍥 Crunchyroll Mode' with icon.
+    Works for any mode you add to the MODES dict."""
+    if not mode_key or mode_key not in MODES:
+        mode_key = "Crunchyroll"
+    
+    mode_info = MODES[mode_key]
+    return f"{mode_info['icon']} {mode_info['display']}"
+
 # ============= PLAN CONFIG (exactly from your screenshot) =============
 PLAN_CONFIG = {
     "FREE": {
@@ -370,7 +380,7 @@ async def show_statistics_menu(query, context):
 📅 <b>Registered:</b> <code>{stats['registered']}</code>
 👑 <b>Plan:</b> <code>{stats['plan']}</code>
 📆 <b>Plan Expires In:</b> <code>{get_days_remaining(stats['expires'])}</code>
-📡 <b>Mode:</b> <code>{stats['mode']}</code>
+📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <code>{limits['current_threads']} / {limits['max_threads']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -497,7 +507,7 @@ Configure your bot preferences below:
 Current: <b>{limits['current_threads']} threads</b> (Max: {limits['max_threads']})
 
 🔌 <b>API Mode</b>: Select scanning method
-Current: <b>{stats.get('api_mode', 'Crunchyroll')}</b>
+Current: <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Click a button to configure:</i>
     """.strip()
@@ -563,9 +573,8 @@ async def show_api_mode_menu(query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {mode_info["icon"]} <b>{mode_info["display"]}</b>
 {features_text}
-
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Current Mode: {mode_info["color"]} <b>{mode_info["display"]}</b>
+<b>Current Mode:</b> <code>{mode_info["color"]} {mode_info["display"]}</code>
 
 Click on a mode below to switch:
     """.strip()
@@ -842,7 +851,7 @@ async def start(update: Update, context: CallbackContext):
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
-📡 Mode: <code><b>{stats.get('api_mode', 'Crunchyroll')}</b></code>
+📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
@@ -1100,7 +1109,7 @@ async def handle_document(update: Update, context: CallbackContext):
 📁 <b>File:</b> <code>{document.file_name}</code>
 📊 <b>Processed:</b> <code>{completed}/{total}</code>
 🧵 <b>Threads:</b> <code>{user_threads}</code>
-📡 Mode: <code>{stats.get('api_mode', 'Crunchyroll')}</code>
+📡 Mode: <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ <b>HITS:</b> <code>{hits_count}</code>
 ❌ <b>BAD:</b> <code>{bad_count}</code>
@@ -1214,7 +1223,7 @@ async def edit_to_main_menu(update_or_query, context):
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
-📡 Mode: <code><b>{stats.get('api_mode', 'Crunchyroll')}</b></code>
+📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
