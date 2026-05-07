@@ -801,7 +801,8 @@ async def start(update: Update, context: CallbackContext):
     await update.message.reply_text(
         welcome,
         parse_mode='HTML',
-        reply_markup=reply_markup
+        reply_markup=reply_markup,
+        reply_to_message_id=update.message.message_id
     )
 
 async def process_thread_count_input(update: Update, context: CallbackContext):
