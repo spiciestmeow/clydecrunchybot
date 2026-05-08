@@ -38,7 +38,6 @@ MODES = {
         "icon": "🍥",
         "color": "🍥",
         "features": [
-            "Checks Crunchyroll linked accounts",
             "Extracts account plan & status",
             "Detects Active Subscription",
             "Shows Email Verification",
