@@ -7,6 +7,7 @@ import string
 import random
 import uuid
 import requests
+import re
 import random
 import threading
 import concurrent.futures
@@ -951,8 +952,8 @@ def check_crunchyroll(email, password, proxy=None):
                 "username": email,
                 "password": password,
                 "scope": "offline_access",
-                "client_id": "y2arvjb0h0rgvtizlovy",
-                "client_secret": "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2",
+                "client_id": "ajcylfwdtjjtq7qpgks3",
+                "client_secret": "oKoU8DMZW7SAaQiGzUEdTQG4IimkL8I_",
                 "device_type": "SamsungTV",
                 "device_id": device_id,
                 "device_name": "Goku"
