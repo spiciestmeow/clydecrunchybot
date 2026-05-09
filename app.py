@@ -138,7 +138,7 @@ PLAN_CONFIG = {
         "display_name": "FREE",
         "daily_limit": 15,
         "max_threads": 8,
-        "multi_scan_max_files": 1,
+        "multi_scan_max_files": 0,
         "queue_waiting": True
     },
     "BASIC": {
@@ -1399,14 +1399,26 @@ async def handle_document(update: Update, context: CallbackContext):
     if not document.file_name.endswith('.txt'):
         await update.message.reply_text("❌ Please send a .txt file only!", parse_mode='HTML')
         return
-
-    # ==================== STRICT DAILY FILE LIMIT ====================
+    
+    # ==================== BLOCK BULK UPLOAD FOR FREE PLAN ====================
     stats = get_user_stats()
     limits = get_plan_limits(stats)
+
+    if limits["display_name"] == "FREE":
+        await update.message.reply_text(
+            f"❌ <b>FREE plan limitation</b>\n\n"
+            f"Bulk file upload is not available on FREE plan.\n"
+            f"Please use single checks (<code>email:password</code>) or upgrade to BASIC/VIP.",
+            parse_mode='HTML'
+        )
+        return
+    # =====================================================================
+
+    # Paid users (BASIC+) continue with normal file limit check
     max_files = limits.get("multi_scan_max_files", 1)
 
     reset_daily_if_needed(stats)
-    stats = get_user_stats()   # Fresh stats
+    stats = get_user_stats()
 
     if stats.get("today_files", 0) >= max_files:
         await update.message.reply_text(
@@ -1416,14 +1428,12 @@ async def handle_document(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
         return
-    # =====================================================================
 
-    # ==================== 4. NOW increment counters (only if accepted) ====================
+    # Increment counters (only paid users reach here)
     update_user_stats({"today_files": stats.get("today_files", 0) + 1})
     update_user_stats({"total_combo_files": stats.get("total_combo_files", 0) + 1})
-    # =====================================================================
 
-    # ====================== Process the file ======================
+    # ====================== Normal file processing ======================
     file = await context.bot.get_file(document.file_id)
     file_content = await file.download_as_bytearray()
     lines = file_content.decode('utf-8', errors='ignore').splitlines()
