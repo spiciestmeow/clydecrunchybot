@@ -281,7 +281,7 @@ def get_plan_limits(stats: dict):
         daily_limit = base_limit + bonus_lines
         today_used = stats.get("today_scans", 0)
         remaining = max(0, daily_limit - today_used)
-        remaining_text = f"{remaining} / {daily_limit}"
+        remaining_text = f"{remaining}/{daily_limit}"
         base_limit_text = f"{base_limit:,}"
     
     return {
@@ -618,9 +618,9 @@ async def show_statistics_menu(query, context):
 
     success_rate = round((stats["total_hits"] / stats["total_scans"] * 100), 2) if stats["total_scans"] > 0 else 0.0
 
-    # New file statistics
+    # File statistics
     max_files = limits.get("multi_scan_max_files", 1)
-    today_files = stats.get("today_files", 0)
+    today_files_used = stats.get("today_files", 0)
     total_files = stats.get("total_combo_files", 0)
 
     text = f"""
@@ -633,7 +633,7 @@ async def show_statistics_menu(query, context):
 📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <code>{limits['current_threads']} / {limits['max_threads']}</code>
-📁 <b>Files Today:</b> <code>{today_files} / {max_files}</code>
+📁 <b>Files Today:</b> <code>{today_files_used} / {max_files}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ Total Scans: <code>{stats['total_scans']}</code>
@@ -1201,6 +1201,10 @@ async def start(update: Update, context: CallbackContext):
     stats = get_user_stats()
 
     limits = get_plan_limits(stats)
+
+    # File statistics for dashboard
+    max_files = limits.get("multi_scan_max_files", 1)
+    today_files = stats.get("today_files", 0)
     
     keyboard = [
         [
@@ -1227,6 +1231,7 @@ async def start(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
+📁 Files Today: <code><b>{today_files}/{max_files}</b></code>
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
