@@ -1400,25 +1400,30 @@ async def handle_document(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Please send a .txt file only!", parse_mode='HTML')
         return
 
-    # ==================== 1. DAILY FILE LIMIT CHECK ====================
+    # ==================== STRICT DAILY FILE LIMIT ====================
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     max_files = limits.get("multi_scan_max_files", 1)
 
     reset_daily_if_needed(stats)
-    stats = get_user_stats()
+    stats = get_user_stats()   # Fresh stats
 
     if stats.get("today_files", 0) >= max_files:
         await update.message.reply_text(
             f"❌ <b>Daily file limit reached!</b>\n\n"
             f"Your <b>{limits['display_name']}</b> plan allows only <b>{max_files}</b> file{'' if max_files == 1 else 's'} per day.\n\n"
-            f"Come back tomorrow or upgrade your plan to send more files.",
+            f"Come back tomorrow or upgrade your plan.",
             parse_mode='HTML'
         )
         return
     # =====================================================================
 
-    # ====================== 2. Download and parse file ======================
+    # ==================== 4. NOW increment counters (only if accepted) ====================
+    update_user_stats({"today_files": stats.get("today_files", 0) + 1})
+    update_user_stats({"total_combo_files": stats.get("total_combo_files", 0) + 1})
+    # =====================================================================
+
+    # ====================== Process the file ======================
     file = await context.bot.get_file(document.file_id)
     file_content = await file.download_as_bytearray()
     lines = file_content.decode('utf-8', errors='ignore').splitlines()
@@ -1436,11 +1441,10 @@ async def handle_document(update: Update, context: CallbackContext):
 
     total = len(accounts)
 
-    # ==================== 3. DAILY SCAN LIMIT CHECK ====================
+    # Daily scan limit check
     if limits["daily_limit"] is not None:
         used = stats.get("today_scans", 0)
         remaining = limits["daily_limit"] - used
-
         if total > remaining:
             await update.message.reply_text(
                 f"❌ <b>Not enough scans left today!</b>\n\n"
@@ -1450,14 +1454,8 @@ async def handle_document(update: Update, context: CallbackContext):
                 parse_mode='HTML'
             )
             return
-    # =====================================================================
 
-    # ==================== 4. NOW increment counters (only if accepted) ====================
-    update_user_stats({"today_files": stats.get("today_files", 0) + 1})
-    update_user_stats({"total_combo_files": stats.get("total_combo_files", 0) + 1})
-    # =====================================================================
-
-    # ====================== 5. Start scanning ======================
+    # ====================== Start scanning ======================
     hits = []
     start_time = time.time()
 
@@ -1508,7 +1506,7 @@ async def handle_document(update: Update, context: CallbackContext):
                     )
                 except:
                     pass
-    
+
     # ====================== UPDATE STATS ======================
     hits_count = len(hits)
     bad_count = total - hits_count
