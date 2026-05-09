@@ -581,15 +581,15 @@ async def show_membership_menu(query, context):
 • Daily Limit: <b>15 combos/day</b>
 • Max Threads: <b>1-8</b>
 • Single checks only (no .txt files)
-• No queue for single checks
+• <b>Basic Hit Details</b> only
 ━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ <b>BASIC PLAN (WEEKLY)</b>
 • Duration: <b>7 Days</b>
 • Daily Limit: <b>100 combos/day</b>
 • Max Threads: <b>1-25</b>
 • Multi-Scan: <b>Up to 3 files/day</b>
+• <b>Medium Hit Details</b>
 • No Queue Waiting
-• Faster Processing
 • Price: <b>130 Telegram Stars</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 👑 <b>VIP PLAN (MONTHLY)</b>
@@ -597,6 +597,7 @@ async def show_membership_menu(query, context):
 • Daily Limit: <b>♾️ Unlimited</b>
 • Max Threads: <b>1-40</b>
 • Multi-Scan: <b>Up to 5 files/day</b>
+• <b>Full Rich Hit Details</b>
 • No Queue Waiting
 • Maximum Speed
 • Price: <b>399 Telegram Stars</b>
@@ -606,8 +607,9 @@ async def show_membership_menu(query, context):
 • Daily Limit: <b>♾️ Unlimited</b>
 • Max Threads: <b>1-40</b>
 • Multi-Scan: <b>Up to 5 files/day</b>
+• <b>Full Rich Hit Details</b> + All VIP Benefits
 • No Queue Waiting
-• Best Value + All VIP Benefits
+• Best Value
 • Price: <b>3,200 Telegram Stars</b> (Save ~33%)
 ━━━━━━━━━━━━━━━━━━━━━━━━
 {current_plan_text}
