@@ -427,17 +427,17 @@ async def show_referrals_menu(query, context):
     
     text = f"""
 🔗 <b>My Referrals</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Statistics:</b>
 ✅ Referral Count: <b>{referral_count}</b>
 📈 Your Daily Limit: <b>{limits['remaining_text']}</b>
 💰 Bonus: <b>+{total_bonus} lines</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 <b>Earn +{bonus_per} lines for each referral!</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 🔗 <b>Your Referral Link:</b>
 {referral_link}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 <i>📤 Share this link with your friends!</i>
 Your daily limit increases by {bonus_per} lines for each person who registers using your link.
 
@@ -445,7 +445,7 @@ Your daily limit increases by {bonus_per} lines for each person who registers us
 • 0 referrals = {limits['base_limit_text']} lines/day
 • 1 referral = {int(str(limits['base_limit_text']).replace(',','')) + bonus_per} lines/day
 • 5 referrals = {int(str(limits['base_limit_text']).replace(',','')) + 5*bonus_per} lines/day
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
@@ -463,11 +463,11 @@ async def show_support_menu(query, context):
     """Replicates the exact Support & Contact page with native preview card"""
     
     text = """📞 <b>Support & Contact</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Need help or want to upgrade?</i>
 
 — Contact: <a href="https://t.me/caydigitals">@caydigitals</a>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 """.strip()
 
     # Inline keyboard (Back button at the bottom, exactly like the screenshot)
@@ -498,12 +498,17 @@ async def show_rewards_menu(query, context):
 
     text = f"""
 🎁 <b>Rewards & Gifts Hub</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 Claim your daily free lines or redeem premium gift codes provided by the admin.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 <b>Possible Rewards:</b>
+• FREE: mostly 2-6 lines (very rare up to <tg-spoiler>45</tg-spoiler>)
+• BASIC: mostly 12-70 lines (very rare up to <tg-spoiler>160</tg-spoiler>)
+• VIP / YEARLY: mostly 50-220 lines (very rare up to <tg-spoiler>600</tg-spoiler>)
+━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Daily Statistics:</b>
 ⏰ Next Reward In: <code>{get_remaining_reward_time(stats)}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
     keyboard = [
@@ -521,7 +526,7 @@ Claim your daily free lines or redeem premium gift codes provided by the admin.
     )
 
 async def claim_daily_reward(query, context):
-    """Personal 24-hour reward timer — FIXED"""
+    """Personal 24-hour reward timer — VERY HARD LOTTERY (0.5% jackpot)"""
     stats = get_user_stats()
     
     if is_daily_reward_active(stats):
@@ -529,19 +534,35 @@ async def claim_daily_reward(query, context):
         await show_rewards_menu(query, context)
         return
     
-    # FIXED: Reset old reward instead of adding to it
-    reward_amount = random.randint(400, 1200)
-    
+    plan = stats.get("plan", "FREE").upper()
+
+    # === VERY HARD LOTTERY (0.5% jackpot) ===
+    if plan == "FREE":
+        # 94.5% tiny | 5% small | 0.5% jackpot
+        rewards = [random.randint(2, 6)] * 189 + [random.randint(8, 15)] * 10 + [random.randint(25, 45)] * 1
+    elif plan == "BASIC":
+        # 79.5% small | 20% decent | 0.5% big
+        rewards = [random.randint(12, 30)] * 159 + [random.randint(35, 70)] * 40 + [random.randint(90, 160)] * 1
+    else:  # VIP or YEARLY
+        # 69.5% decent | 30% good | 0.5% massive jackpot
+        rewards = [random.randint(50, 110)] * 139 + [random.randint(130, 220)] * 60 + [random.randint(300, 600)] * 1
+
+    reward_amount = random.choice(rewards)
+
     update_user_stats({
-        "daily_reward_lines": reward_amount,           # ← Reset (don't add!)
+        "daily_reward_lines": reward_amount,
         "daily_reward_claimed": True,
         "daily_reward_last_claimed": datetime.utcnow().isoformat()
     })
     
-    await query.answer(
-        f"🎉 Congratulations! You received +{reward_amount} lines (Valid for 24H).",
-        show_alert=True
-    )
+    # Special jackpot message
+    if reward_amount >= 90:
+        await query.answer(f"🎉🎉🎉 JACKPOT!!! +{reward_amount} lines (Valid for 24H)!", show_alert=True)
+    else:
+        await query.answer(
+            f"🎉 You received +{reward_amount} lines (Valid for 24H).",
+            show_alert=True
+        )
     
     await show_rewards_menu(query, context)
 
@@ -555,13 +576,13 @@ async def show_membership_menu(query, context):
     
     text = f"""
 👑 <b>MEMBERSHIP PLANS</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 🆓 <b>FREE PLAN</b>
 • Daily Limit: <b>15 combos/day</b>
 • Max Threads: <b>1-8</b>
 • Multi-Scan: <b>1 file only</b>
 • Queue Waiting System
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ <b>BASIC PLAN (WEEKLY)</b>
 • Duration: <b>7 Days</b>
 • Daily Limit: <b>100 combos/day</b>
@@ -570,7 +591,7 @@ async def show_membership_menu(query, context):
 • No Queue Waiting
 • Faster Processing
 • Price: <b>130 Telegram Stars</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 👑 <b>VIP PLAN (MONTHLY)</b>
 • Duration: <b>30 Days</b>
 • Daily Limit: <b>♾️ Unlimited</b>
@@ -579,7 +600,7 @@ async def show_membership_menu(query, context):
 • No Queue Waiting
 • Maximum Speed
 • Price: <b>399 Telegram Stars</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 🌟 <b>YEARLY VIP PLAN</b>
 • Duration: <b>365 Days</b>
 • Daily Limit: <b>♾️ Unlimited</b>
@@ -588,7 +609,7 @@ async def show_membership_menu(query, context):
 • No Queue Waiting
 • Best Value + All VIP Benefits
 • Price: <b>3,200 Telegram Stars</b> (Save ~33%)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 {current_plan_text}
 
 ⚡ <b>Payment Method</b>
@@ -625,28 +646,28 @@ async def show_statistics_menu(query, context):
 
     text = f"""
 📊 <b>Your Statistics</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 👤 <b>User ID:</b> <code>{stats['user_id']}</code>
 📅 <b>Registered:</b> <code>{stats['registered']}</code>
 👑 <b>Plan:</b> <code>{stats['plan']}</code>
 📆 <b>Plan Expires In:</b> <code>{get_days_remaining(stats['expires'])}</code>
 📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <code>{limits['current_threads']} / {limits['max_threads']}</code>
 📁 <b>Files Today:</b> <code>{today_files_used} / {max_files}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ Total Scans: <code>{stats['total_scans']}</code>
 📁 Total Files Processed: <code>{total_files}</code>
 💎 Total Hits: <code>{stats['total_hits']}</code>
 ❌ Total Bad: <code>{stats.get('total_free', 0)}</code>
 🎯 Success Rate: <code>{success_rate}%</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Today's Statistics:</b>
 📊 Scans Used: <code>{stats['today_scans']}</code>
 ⏳ Remaining: <code>{limits['remaining_text']}</code>
 👥 Referrals: <code>{stats['referrals']}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 <b>Rewards & Limits Details:</b>
 🎟️ Claimed Codes: <code>0</code>
 🎁 Daily Reward Claimed Today: <code>{'Yes' if stats['daily_reward_claimed'] else 'No'}</code>
@@ -794,7 +815,7 @@ async def show_settings_menu(query, context):
     
     settings_text = f"""
 ⚙️ <b>Settings Menu</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 Configure your bot preferences below:
 
 🧵 <b>Threads</b>: Control scan speed
@@ -802,7 +823,7 @@ Current: <code>{limits['current_threads']} threads</code> (Max: {limits['max_thr
 
 🔌 <b>API Mode</b>: Select scanning method
 Current: <code>{get_mode_display(stats.get('api_mode'))}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Click a button to configure:</i>
     """.strip()
     
@@ -865,10 +886,10 @@ async def show_api_mode_menu(query, context):
     
     text = f"""
 📡 <b>API Mode Selection</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 {mode_info["icon"]} <b>{mode_info["display"]}</b>
 {features_text}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 <b>Current Mode:</b> <code>{mode_info["color"]} {mode_info["display"]}</code>
 
 Click on a mode below to switch:
@@ -1237,7 +1258,7 @@ async def start(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📤 <b>Send your combo list (.txt file)</b>
 <i>Format: mail:pass (one per line)</i>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
 📁 Files Today: <code><b>{today_files}/{max_files}</b></code>
@@ -1245,7 +1266,7 @@ async def start(update: Update, context: CallbackContext):
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
 📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
     await update.message.reply_text(
@@ -1361,12 +1382,12 @@ async def handle_message(update: Update, context: CallbackContext):
         else:
             await update.message.reply_text(
                 """❌ <b>Invalid Format!</b>
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ━━━━━━━━━━━━━━━━━━━━━━━━
     Send like this:
     <code>email:password</code>
     <b>Example:</b>
     <code>user@example.com:supersecret123</code>
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    ━━━━━━━━━━━━━━━━━━━━━━━━
     💡 You can also send a <b>.txt file</b> with multiple accounts (one per line).""",
                 parse_mode='HTML'
             )
@@ -1535,18 +1556,18 @@ async def handle_document(update: Update, context: CallbackContext):
     
     summary = f"""
 <b>📊 Scan Completed ✅</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 📁 <b>File:</b> <code>{document.file_name}</code>
 📊 <b>Processed:</b> <code>{completed}/{total}</code>
 🧵 <b>Threads:</b> <code>{user_threads}</code>
 📡 Mode: <code>{get_mode_display(stats.get('api_mode'))}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ <b>HITS:</b> <code>{hits_count}</code>
 ❌ <b>BAD:</b> <code>{bad_count}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 ⏱ <b>Elapsed:</b> <code>{elapsed}s</code>
 ⚡ <b>CPM:</b> <code>{cpm}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 """
     await progress_msg.edit_text(summary, parse_mode='HTML')
     await manage_result_pin(update, context, progress_msg.message_id)
@@ -1567,7 +1588,7 @@ async def handle_document(update: Update, context: CallbackContext):
             hits_text += f"📊 Plan       : {hit['plan']}\n"
             hits_text += f"📆 Expires    : {expiry_display}\n"
             hits_text += f"🌍 Country    : {country_code} {flag}\n"
-            hits_text += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            hits_text += f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
         hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
         with open(hits_file, "w", encoding="utf-8") as f:
@@ -1575,9 +1596,9 @@ async def handle_document(update: Update, context: CallbackContext):
 
         fancy_caption = f"""
 👍 <b>{hits_count}x Crunchyroll Hits</b>
-────────────────────────────
+────────────────────────
 ☰ BY @caydigitals ✅
-────────────────────────────
+────────────────────────
 <a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/cayigitals">Admin</a>
         """.strip()
 
@@ -1647,10 +1668,10 @@ async def edit_to_main_menu(update_or_query, context):
     
     welcome = f"""
 <b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗥𝗨𝗡𝗖𝗛𝗬𝗥𝗢𝗟𝗟 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 📤 <b>Send your combo list (.txt file)</b>
 <i>Format: mail:pass (one per line)</i>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
 📁 Files Today: <code><b>{today_files}/{max_files}</b></code>
@@ -1658,7 +1679,7 @@ async def edit_to_main_menu(update_or_query, context):
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
 📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
     
