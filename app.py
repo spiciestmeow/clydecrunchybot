@@ -113,14 +113,14 @@ def generate_referral_code(user_id: int) -> str:
     return f"{prefix}{suffix}{random_part}"[:12]
 
 def get_referral_bonus_per_referral(plan: str) -> int:
-    """Dynamic bonus per referral based on plan"""
+    """Referral bonus per referral — hard to earn version"""
     plan = plan.upper()
-    if plan == "VIP":
-        return 1000
+    if plan == "VIP" or plan == "YEARLY":
+        return 30
     elif plan == "BASIC":
-        return 500
+        return 12
     else:  # FREE
-        return 300
+        return 3
 
 # ============= GLOBAL MODE DISPLAY HELPER (clean & future-proof) =============
 def get_mode_display(mode_key: str = None) -> str:
@@ -431,7 +431,7 @@ async def show_referrals_menu(query, context):
 📊 <b>Your Statistics:</b>
 ✅ Referral Count: <b>{referral_count}</b>
 📈 Your Daily Limit: <b>{limits['remaining_text']}</b>
-💰 Bonus: <b>+{total_bonus} lines</b>
+💰 Total Bonus: <b>+{total_bonus} lines</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 🎁 <b>Earn +{bonus_per} lines for each referral!</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -443,8 +443,8 @@ Your daily limit increases by {bonus_per} lines for each person who registers us
 
 💡 <b>Example:</b>
 • 0 referrals = {limits['base_limit_text']} lines/day
-• 1 referral = {int(str(limits['base_limit_text']).replace(',','')) + bonus_per} lines/day
-• 5 referrals = {int(str(limits['base_limit_text']).replace(',','')) + 5*bonus_per} lines/day
+• 5 referrals = +{5*bonus_per} lines/day
+• 10 referrals = +{10*bonus_per} lines/day
 ━━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
@@ -502,9 +502,9 @@ async def show_rewards_menu(query, context):
 Claim your daily free lines or redeem premium gift codes provided by the admin.
 
 📊 <b>Possible Rewards:</b>
-• FREE: mostly 2-6 lines (very rare up to <tg-spoiler>45</tg-spoiler>)
-• BASIC: mostly 12-70 lines (very rare up to <tg-spoiler>160</tg-spoiler>)
-• VIP / YEARLY: mostly 50-220 lines (very rare up to <tg-spoiler>600</tg-spoiler>)
+• <b>FREE:</b> mostly 2-6 lines (very rare up to <tg-spoiler>45</tg-spoiler>)
+• <b>BASIC:</b> mostly 12-70 lines (very rare up to <tg-spoiler>160</tg-spoiler>)
+• <b>VIP / YEARLY:</b> mostly 50-220 lines (very rare up to <tg-spoiler>600</tg-spoiler>)
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Daily Statistics:</b>
 ⏰ Next Reward In: <code>{get_remaining_reward_time(stats)}</code>
@@ -580,14 +580,14 @@ async def show_membership_menu(query, context):
 🆓 <b>FREE PLAN</b>
 • Daily Limit: <b>15 combos/day</b>
 • Max Threads: <b>1-8</b>
-• Multi-Scan: <b>1 file only</b>
-• Queue Waiting System
+• Single checks only (no .txt files)
+• No queue for single checks
 ━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ <b>BASIC PLAN (WEEKLY)</b>
 • Duration: <b>7 Days</b>
 • Daily Limit: <b>100 combos/day</b>
 • Max Threads: <b>1-25</b>
-• Multi-Scan: <b>Up to 3 files</b>
+• Multi-Scan: <b>Up to 3 files/day</b>
 • No Queue Waiting
 • Faster Processing
 • Price: <b>130 Telegram Stars</b>
@@ -596,7 +596,7 @@ async def show_membership_menu(query, context):
 • Duration: <b>30 Days</b>
 • Daily Limit: <b>♾️ Unlimited</b>
 • Max Threads: <b>1-40</b>
-• Multi-Scan: <b>Up to 5 files</b>
+• Multi-Scan: <b>Up to 5 files/day</b>
 • No Queue Waiting
 • Maximum Speed
 • Price: <b>399 Telegram Stars</b>
@@ -605,7 +605,7 @@ async def show_membership_menu(query, context):
 • Duration: <b>365 Days</b>
 • Daily Limit: <b>♾️ Unlimited</b>
 • Max Threads: <b>1-40</b>
-• Multi-Scan: <b>Up to 5 files</b>
+• Multi-Scan: <b>Up to 5 files/day</b>
 • No Queue Waiting
 • Best Value + All VIP Benefits
 • Price: <b>3,200 Telegram Stars</b> (Save ~33%)
@@ -852,8 +852,8 @@ async def handle_set_threads(query, context):
     
     # New updated limits based on your current PLAN_CONFIG
     text = f"""
-<b>Set Thread Count</b>
-
+🧵 <b>Set Thread Count</b>
+━━━━━━━━━━━━━━━━━━━━━━━━
 Limits by plan:
 🆓 FREE: <b>1-8</b>
 ⭐ BASIC: <b>1-25</b>
@@ -862,7 +862,7 @@ Limits by plan:
 Your plan <b>{plan}</b> allows <b>1-{max_t}</b> threads.
 
 Current threads: <b>{limits['current_threads']}</b>
-
+━━━━━━━━━━━━━━━━━━━━━━━━
 Send a number between 1 and {max_t} to set your thread count.
     """.strip()
     
