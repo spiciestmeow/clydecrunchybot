@@ -652,7 +652,7 @@ async def show_statistics_menu(query, context):
 ✨ Daily Reward Lines (Active): <code>{stats['daily_reward_lines']}</code> {get_remaining_reward_time(stats) if is_daily_reward_active(stats) else ''}
 👥 Referral Bonus Lines: <code>+{stats['referral_bonus_lines']}</code>
 📦 Base Plan Limit: <code>{limits['base_limit_text']}</code>
-📁 <b>Total Files Processed:</b> <code>{total_files}</code>
+📁 Total Files Processed: <code>{total_files}</code>
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
@@ -1400,7 +1400,7 @@ async def handle_document(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Please send a .txt file only!", parse_mode='HTML')
         return
 
-    # ==================== DAILY FILE LIMIT ENFORCEMENT ====================
+    # ==================== 1. DAILY FILE LIMIT CHECK ====================
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     max_files = limits.get("multi_scan_max_files", 1)
@@ -1416,12 +1416,9 @@ async def handle_document(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
         return
-
-    update_user_stats({"today_files": stats.get("today_files", 0) + 1})
-    update_user_stats({"total_combo_files": stats.get("total_combo_files", 0) + 1})
     # =====================================================================
 
-    # ====================== Normal file processing ======================
+    # ====================== 2. Download and parse file ======================
     file = await context.bot.get_file(document.file_id)
     file_content = await file.download_as_bytearray()
     lines = file_content.decode('utf-8', errors='ignore').splitlines()
@@ -1436,11 +1433,11 @@ async def handle_document(update: Update, context: CallbackContext):
     if not accounts:
         await update.message.reply_text("❌ No valid accounts found!", parse_mode='HTML')
         return
-    
+
     total = len(accounts)
 
-    # ==================== IMPROVED DAILY SCAN LIMIT CHECK ====================
-    if limits["daily_limit"] is not None:   # FREE and BASIC have limits
+    # ==================== 3. DAILY SCAN LIMIT CHECK ====================
+    if limits["daily_limit"] is not None:
         used = stats.get("today_scans", 0)
         remaining = limits["daily_limit"] - used
 
@@ -1455,7 +1452,12 @@ async def handle_document(update: Update, context: CallbackContext):
             return
     # =====================================================================
 
-    # ====================== Continue with normal scanning ======================
+    # ==================== 4. NOW increment counters (only if accepted) ====================
+    update_user_stats({"today_files": stats.get("today_files", 0) + 1})
+    update_user_stats({"total_combo_files": stats.get("total_combo_files", 0) + 1})
+    # =====================================================================
+
+    # ====================== 5. Start scanning ======================
     hits = []
     start_time = time.time()
 
@@ -1463,12 +1465,11 @@ async def handle_document(update: Update, context: CallbackContext):
     limits = get_plan_limits(stats)
     user_threads = limits["current_threads"]
 
-    # ================= BEST PROXYLESS RATE LIMITER =================
     if limits["display_name"] == "FREE":
         max_rps = 12
     elif "BASIC" in limits["display_name"]:
         max_rps = 22
-    else:  # VIP / YEARLY
+    else:
         max_rps = 32
     rate_limiter = RateLimiter(max_rps=max_rps)
 
@@ -1478,16 +1479,6 @@ async def handle_document(update: Update, context: CallbackContext):
         parse_mode='HTML'
     )
 
-    if limits["daily_limit"] is not None:
-        if stats["today_scans"] + total > limits["daily_limit"]:
-            await update.message.reply_text(
-                f"❌ Daily limit reached!\n"
-                f"You have already used {stats['today_scans']}/{limits['daily_limit']} scans today.\n"
-                f"Upgrade your plan or wait until tomorrow.",
-                parse_mode='HTML'
-            )
-            return
-    
     def check_account(acc):
         email, pwd = acc
         rate_limiter.acquire()
@@ -1530,7 +1521,7 @@ async def handle_document(update: Update, context: CallbackContext):
         "today_scans": current_stats["today_scans"] + total
     })
 
-    # ====================== SUMMARY ======================
+    # ====================== SUMMARY + HITS/BAD FILES (rest of your original code) ======================
     elapsed = int(time.time() - start_time)
     cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
     
