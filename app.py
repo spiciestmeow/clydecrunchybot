@@ -71,9 +71,9 @@ def clean_expired_daily_reward(stats: dict):
     if is_daily_reward_active(stats):
         return stats
     
-    # Expired → reset everything
+    user_id = stats.get('user_id')
     if stats.get('daily_reward_lines', 0) > 0 or stats.get('daily_reward_claimed', False):
-        update_user_stats({
+        update_user_stats(user_id, {
             "daily_reward_lines": 0,
             "daily_reward_claimed": False
         })
@@ -385,32 +385,31 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 tg_app = Application.builder().token(BOT_TOKEN).build()
 
-def get_user_stats():
-    response = supabase.table("user_stats").select("*").eq("user_id", ADMIN_ID).execute()
+def get_user_stats(user_id: int):
+    response = supabase.table("user_stats").select("*").eq("user_id", user_id).execute()
     if response.data:
         stats = response.data[0]
         stats = clean_expired_daily_reward(stats)
         
         # Auto-generate referral code if missing (for existing users)
         if not stats.get('referral_code'):
-            new_code = generate_referral_code(ADMIN_ID)
-            update_user_stats({"referral_code": new_code})
+            new_code = generate_referral_code(user_id)  # ← was ADMIN_ID
+            update_user_stats(user_id, {"referral_code": new_code})
             stats['referral_code'] = new_code
         
         # Auto update last active
-        update_user_stats({"last_active": datetime.now().isoformat()})
+        update_user_stats(user_id, {"last_active": datetime.now().isoformat()})
         return stats
     
     # First time user - create row with referral code
     default = {
-        "user_id": ADMIN_ID,
+        "user_id": user_id,
         "username": None,
         "first_name": None,
         "registered": str(date.today()),
         "last_active": datetime.now().isoformat(),
         "plan": "FREE",
         "expires": "N/A",
-        "mode": "Crunchyroll",
         "threads": 8,
         "api_mode": "Crunchyroll",
         "total_scans": 0,
@@ -421,7 +420,7 @@ def get_user_stats():
         "today_scans": 0,
         "today_files": 0,
         "referrals": 0,
-        "referral_code": generate_referral_code(ADMIN_ID),
+        "referral_code": generate_referral_code(user_id),
         "referred_by": None,
         "daily_reward_claimed": False,
         "daily_reward_last_claimed": None,
@@ -436,16 +435,16 @@ def get_user_stats():
     return default
 
 # ============= TELEGRAM BOT HANDLERS =============
-def update_user_stats(data: dict):
+def update_user_stats(user_id: int, data: dict):
     data["updated_at"] = datetime.now().isoformat()
-    supabase.table("user_stats").update(data).eq("user_id", ADMIN_ID).execute()
+    supabase.table("user_stats").update(data).eq("user_id", user_id).execute()
 
-def reset_daily_if_needed(stats: dict):
+def reset_daily_if_needed(stats: dict, user_id: int):
     """Automatically reset daily scans AND daily files if it's a new day"""
     if stats.get("today_date") != str(date.today()):
-        update_user_stats({
+        update_user_stats(user_id, {
             "today_scans": 0,
-            "today_files": 0,          # ← NEW
+            "today_files": 0,
             "today_date": str(date.today())
         })
         return True
@@ -459,14 +458,14 @@ def update_user_stats_general(user_id: int, data: dict):
 
 async def show_referrals_menu(query, context):
     context.user_data['in_main_menu'] = False
-    
-    stats = get_user_stats()
+    user_id = query.from_user.id
+    stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
     
     # Auto-generate referral code if missing
     if not stats.get('referral_code'):
-        new_code = generate_referral_code(stats['user_id'])
-        update_user_stats({"referral_code": new_code})
+        new_code = generate_referral_code(user_id)
+        update_user_stats(user_id, {"referral_code": new_code})
         stats['referral_code'] = new_code
     
     referral_count = stats.get('referrals', 0)
@@ -537,8 +536,8 @@ async def show_support_menu(query, context):
 
 async def show_rewards_menu(query, context):
     context.user_data['in_main_menu'] = False
-    
-    stats = get_user_stats()
+    user_id = query.from_user.id
+    stats = get_user_stats(user_id)
     stats = clean_expired_daily_reward(stats)
     is_active = is_daily_reward_active(stats)
     
@@ -578,7 +577,8 @@ Claim your daily free lines or redeem premium gift codes provided by the admin.
 
 async def claim_daily_reward(query, context):
     """Personal 24-hour reward timer — VERY HARD LOTTERY (0.5% jackpot)"""
-    stats = get_user_stats()
+    user_id = query.from_user.id
+    stats = get_user_stats(user_id)
     
     if is_daily_reward_active(stats):
         await query.answer("❌ Your previous reward is still active!", show_alert=True)
@@ -600,7 +600,7 @@ async def claim_daily_reward(query, context):
 
     reward_amount = random.choice(rewards)
 
-    update_user_stats({
+    update_user_stats(user_id, {
         "daily_reward_lines": reward_amount,
         "daily_reward_claimed": True,
         "daily_reward_last_claimed": datetime.utcnow().isoformat()
@@ -620,7 +620,8 @@ async def claim_daily_reward(query, context):
 # ============= MEMBERSHIP PLAN MENU (Updated to match PLAN_CONFIG) =============
 async def show_membership_menu(query, context):
     context.user_data['in_main_menu'] = False
-    stats = get_user_stats()
+    user_id = query.from_user.id
+    stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
     
     current_plan_text = f"📌 Your Current Plan: <b>{limits['display_name']}</b>"
@@ -680,13 +681,14 @@ Contact: <a href="https://t.me/caydigitals">@caydigitals</a>
 # ============= STATISTICS MENU (Exact match to your screenshot) =============
 async def show_statistics_menu(query, context):
     context.user_data['in_main_menu'] = False
-    stats = get_user_stats()
+    user_id = query.from_user.id
+    stats = get_user_stats(user_id)
     stats = clean_expired_daily_reward(stats)
 
     # Auto reset daily stats if new day
     if stats["today_date"] != str(date.today()):
-        update_user_stats({"today_scans": 0, "today_date": str(date.today())})
-        stats = get_user_stats()  # Refresh after reset
+        update_user_stats(user_id, {"today_scans": 0, "today_date": str(date.today())})
+        stats = get_user_stats(user_id)
     
     limits = get_plan_limits(stats)
 
@@ -862,8 +864,8 @@ async def show_settings_menu(query, context):
     # ←←← IMPORTANT: Clear waiting state when returning from Set Threads
     if 'waiting_for_threads' in context.user_data:
         context.user_data['waiting_for_threads'] = False
-
-    stats = get_user_stats()
+    user_id = query.from_user.id
+    stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
     
     settings_text = f"""
@@ -898,7 +900,8 @@ Current: <code>{get_mode_display(stats.get('api_mode'))}</code>
 
 async def handle_set_threads(query, context):
     context.user_data['in_main_menu'] = False
-    stats = get_user_stats()
+    user_id = query.from_user.id
+    stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
     plan = limits["display_name"]
     max_t = limits["max_threads"]
@@ -927,9 +930,8 @@ Send a number between 1 and {max_t} to set your thread count.
 
 async def show_api_mode_menu(query, context):
     context.user_data['in_main_menu'] = False
-    """Full dynamic API Mode Selection — exactly like your Netflix screenshot"""
-    
-    stats = get_user_stats()
+    user_id = query.from_user.id
+    stats = get_user_stats(user_id)
     current_mode = stats.get("api_mode", "Crunchyroll")
     
     mode_info = MODES.get(current_mode, MODES["Crunchyroll"])
@@ -1311,10 +1313,21 @@ async def start(update: Update, context: CallbackContext):
         await send_join_channel_message(update, context)
         return
 
-    stats = get_user_stats()
-    reset_daily_if_needed(stats)
-    stats = get_user_stats()
+    user_id = update.effective_user.id
 
+    # Save username/first_name on first use
+    username = update.effective_user.username
+    first_name = update.effective_user.first_name
+
+    stats = get_user_stats(user_id)
+
+    # Update name info if missing
+    if not stats.get('username') and username:
+        update_user_stats(user_id, {"username": username, "first_name": first_name})
+    
+
+    reset_daily_if_needed(stats, user_id)
+    stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
 
     # File statistics for dashboard
@@ -1354,6 +1367,8 @@ async def start(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
+    context.user_data['in_main_menu'] = True
+
     await update.message.reply_text(
         welcome,
         parse_mode='HTML',
@@ -1362,19 +1377,19 @@ async def start(update: Update, context: CallbackContext):
     )
 
 async def process_thread_count_input(update: Update, context: CallbackContext):
-    """Handles number input after clicking 'Set Threads'"""
     text = update.message.text.strip()
+    user_id = update.effective_user.id
     
     try:
         new_threads = int(text)
-        stats = get_user_stats()
+        stats = get_user_stats(user_id)
         limits = get_plan_limits(stats)
         max_allowed = limits["max_threads"]
         plan_name = limits["display_name"]
 
         if 1 <= new_threads <= max_allowed:
             # Update in database
-            update_user_stats({
+            update_user_stats(user_id,{
                 "threads": new_threads
             })
             
@@ -1408,31 +1423,27 @@ async def handle_message(update: Update, context: CallbackContext):
     if not await check_subscription(update, context):
         await send_join_channel_message(update, context)
         return
+    
+    user_id = update.effective_user.id  # ← get once, use everywhere
 
-    if not is_owner(update):
-        return
-    
-    text = update.message.text.strip()
-    
-    # Priority: Waiting for thread count input
     if context.user_data.get('waiting_for_threads'):
         await process_thread_count_input(update, context)
         return
     
     is_on_main_menu = context.user_data.get('in_main_menu', False)
+    text = update.message.text.strip()
     looks_like_combo = ':' in text and '@' in text
     
     # 🔥 NEW: Only trigger single checker when on the main dashboard
     if is_on_main_menu:
         if looks_like_combo:
-
             parts = text.split(':', 1)
             email = parts[0].strip()
             password = parts[1].strip()
-            
-            stats = get_user_stats()
-            reset_daily_if_needed(stats)
-            stats = get_user_stats()
+
+            stats = get_user_stats(user_id)
+            reset_daily_if_needed(stats, user_id)
+            stats = get_user_stats(user_id)
             limits = get_plan_limits(stats)
             
             if limits["daily_limit"] is not None:
@@ -1453,7 +1464,7 @@ async def handle_message(update: Update, context: CallbackContext):
             result = await run_blocking(check_crunchyroll, email, password)
                         
             # Get current user's plan
-            stats = get_user_stats()
+            stats = get_user_stats(user_id)
             user_plan = stats.get("plan", "FREE").upper()
 
             response = format_single_result(result, user_plan)
@@ -1465,7 +1476,7 @@ async def handle_message(update: Update, context: CallbackContext):
             hits_increment = 1 if result['success'] else 0
             bad_increment = 1 if not result['success'] else 0
             
-            update_user_stats({
+            update_user_stats(user_id, {
                 "total_scans": stats["total_scans"] + 1,
                 "total_hits": stats["total_hits"] + hits_increment,
                 "total_free": stats.get("total_free", 0) + bad_increment,
@@ -1499,9 +1510,6 @@ async def handle_document(update: Update, context: CallbackContext):
         await send_join_channel_message(update, context)
         return
 
-    if not is_owner(update):
-        return
-    
     document = update.message.document
     is_on_main_menu = context.user_data.get('in_main_menu', False)
     
@@ -1518,8 +1526,10 @@ async def handle_document(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Please send a .txt file only!", parse_mode='HTML')
         return
     
+    user_id = update.effective_user.id
+    
     # ==================== BLOCK BULK UPLOAD FOR FREE PLAN ====================
-    stats = get_user_stats()
+    stats = get_user_stats(user_id)        # ← pass user_id
     limits = get_plan_limits(stats)
 
     if limits["display_name"] == "FREE":
@@ -1535,8 +1545,8 @@ async def handle_document(update: Update, context: CallbackContext):
     # Paid users (BASIC+) continue with normal file limit check
     max_files = limits.get("multi_scan_max_files", 1)
 
-    reset_daily_if_needed(stats)
-    stats = get_user_stats()
+    reset_daily_if_needed(stats, user_id)  # ← pass user_id
+    stats = get_user_stats(user_id)
 
     if stats.get("today_files", 0) >= max_files:
         await update.message.reply_text(
@@ -1548,8 +1558,8 @@ async def handle_document(update: Update, context: CallbackContext):
         return
 
     # Increment counters (only paid users reach here)
-    update_user_stats({"today_files": stats.get("today_files", 0) + 1})
-    update_user_stats({"total_combo_files": stats.get("total_combo_files", 0) + 1})
+    update_user_stats(user_id, {"today_files": stats.get("today_files", 0) + 1})
+    update_user_stats(user_id, {"total_combo_files": stats.get("total_combo_files", 0) + 1})
 
     # ====================== Normal file processing ======================
     file = await context.bot.get_file(document.file_id)
@@ -1587,7 +1597,7 @@ async def handle_document(update: Update, context: CallbackContext):
     hits = []
     start_time = time.time()
 
-    stats = get_user_stats()
+    stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
     user_threads = limits["current_threads"]
 
@@ -1638,9 +1648,9 @@ async def handle_document(update: Update, context: CallbackContext):
     # ====================== UPDATE STATS ======================
     hits_count = len(hits)
     bad_count = total - hits_count
-    current_stats = get_user_stats()
-    
-    update_user_stats({
+    current_stats = get_user_stats(user_id)
+
+    update_user_stats(user_id, {
         "total_scans": current_stats["total_scans"] + total,
         "total_hits": current_stats["total_hits"] + hits_count,
         "total_free": current_stats.get("total_free", 0) + bad_count,
@@ -1675,7 +1685,7 @@ async def handle_document(update: Update, context: CallbackContext):
 # ====================== FULL CAPTION HITS FILE (Tiered) ======================
     if hits_count > 0:
         # Get user's plan for tiered formatting
-        current_stats = get_user_stats()
+        current_stats = get_user_stats(user_id)
         user_plan = current_stats.get("plan", "FREE").upper()
 
         hits_text = f"🎉 CRUNCHYROLL HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
@@ -1735,7 +1745,15 @@ async def edit_to_main_menu(update_or_query, context):
     if 'waiting_for_threads' in context.user_data:
         context.user_data['waiting_for_threads'] = False
 
-    stats = get_user_stats()
+    # Get user_id from either Update or CallbackQuery
+    if hasattr(update_or_query, 'callback_query') and update_or_query.callback_query is not None:
+        user_id = update_or_query.callback_query.from_user.id
+    elif hasattr(update_or_query, 'from_user') and update_or_query.from_user is not None:
+        user_id = update_or_query.from_user.id
+    else:
+        user_id = update_or_query.effective_user.id
+
+    stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
     
     # File statistics for dashboard
@@ -1809,10 +1827,6 @@ async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     data = query.data
 
-async def button_callback(update: Update, context: CallbackContext):
-    query = update.callback_query
-    data = query.data
-
     # Handle verification button
     if data == "verify_join":
         if await check_subscription(update, context):
@@ -1870,7 +1884,8 @@ async def button_callback(update: Update, context: CallbackContext):
 
     elif data.startswith("set_mode:"):
         new_mode = data.split(":", 1)[1]
-        stats = get_user_stats()
+        user_id = query.from_user.id
+        stats = get_user_stats(user_id)
         current_mode = stats.get("api_mode", "Crunchyroll")
 
         if new_mode == current_mode:
@@ -1878,10 +1893,7 @@ async def button_callback(update: Update, context: CallbackContext):
             return
 
         # Update BOTH columns in database
-        update_user_stats({
-            "api_mode": new_mode,
-            "mode": new_mode
-        })
+        update_user_stats(user_id, {"api_mode": new_mode, "mode": new_mode})
 
         await query.answer(f"✅ Switched to {new_mode} Mode!", show_alert=False)
         await show_api_mode_menu(query, context)
