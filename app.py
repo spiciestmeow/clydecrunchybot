@@ -1283,11 +1283,6 @@ async def start(update: Update, context: CallbackContext):
         )
         return
 
-    context.user_data['in_main_menu'] = True
-    if not is_owner(update):
-        await update.message.reply_text("❌ This bot is private.", parse_mode='HTML')
-        return
-    
     stats = get_user_stats()
     reset_daily_if_needed(stats)
     stats = get_user_stats()
