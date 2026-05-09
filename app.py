@@ -1833,12 +1833,6 @@ async def button_callback(update: Update, context: CallbackContext):
         await send_join_channel_message(update, context)
         return
 
-    if not is_owner(update):
-        await query.edit_message_text("❌ Access Denied.")
-        return
-
-    # ... rest of your button_callback code stays exactly the same
-
     if data == "menu_stats":
             context.user_data['in_main_menu'] = False
             await show_statistics_menu(query, context)
