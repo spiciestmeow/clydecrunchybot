@@ -302,6 +302,23 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def is_owner(update: Update):
     return update.effective_user and update.effective_user.id == ADMIN_ID
 
+# ============= SIMPLE CHANNEL JOIN CHECK (EASY WAY) =============
+async def check_subscription(update: Update, context: CallbackContext) -> bool:
+    """Returns True if user is in @caysredirect. Owner always allowed."""
+    if is_owner(update):
+        return True
+    
+    user = update.effective_user
+    if not user:
+        return False
+
+    try:
+        member = await context.bot.get_chat_member(CHANNEL_USERNAME, user.id)
+        # These statuses = joined
+        return member.status in ["member", "administrator", "creator", "restricted"]
+    except:
+        return False
+
 # ============= BLOCKING RUNNER =============
 async def run_blocking(func, *args, **kwargs):
     loop = asyncio.get_running_loop()
@@ -427,17 +444,17 @@ async def show_referrals_menu(query, context):
     
     text = f"""
 🔗 <b>My Referrals</b>
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Statistics:</b>
 ✅ Referral Count: <b>{referral_count}</b>
 📈 Your Daily Limit: <b>{limits['remaining_text']}</b>
 💰 Total Bonus: <b>+{total_bonus} lines</b>
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 🎁 <b>Earn +{bonus_per} lines for each referral!</b>
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 🔗 <b>Your Referral Link:</b>
 {referral_link}
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 <i>📤 Share this link with your friends!</i>
 Your daily limit increases by {bonus_per} lines for each person who registers using your link.
 
@@ -445,7 +462,7 @@ Your daily limit increases by {bonus_per} lines for each person who registers us
 • 0 referrals = {limits['base_limit_text']} lines/day
 • 5 referrals = +{5*bonus_per} lines/day
 • 10 referrals = +{10*bonus_per} lines/day
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
@@ -463,11 +480,11 @@ async def show_support_menu(query, context):
     """Replicates the exact Support & Contact page with native preview card"""
     
     text = """📞 <b>Support & Contact</b>
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 <i>Need help or want to upgrade?</i>
 
 — Contact: <a href="https://t.me/caydigitals">@caydigitals</a>
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 """.strip()
 
     # Inline keyboard (Back button at the bottom, exactly like the screenshot)
@@ -576,13 +593,13 @@ async def show_membership_menu(query, context):
     
     text = f"""
 👑 <b>MEMBERSHIP PLANS</b>
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 🆓 <b>FREE PLAN</b>
 • Daily Limit: <b>15 combos/day</b>
 • Max Threads: <b>1-8</b>
 • Single checks only (no .txt files)
 • <b>Basic Hit Details</b> only
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ <b>BASIC PLAN (WEEKLY)</b>
 • Duration: <b>7 Days</b>
 • Daily Limit: <b>100 combos/day</b>
@@ -591,7 +608,7 @@ async def show_membership_menu(query, context):
 • <b>Medium Hit Details</b>
 • No Queue Waiting
 • Price: <b>130 Telegram Stars</b>
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 👑 <b>VIP PLAN (MONTHLY)</b>
 • Duration: <b>30 Days</b>
 • Daily Limit: <b>♾️ Unlimited</b>
@@ -601,7 +618,7 @@ async def show_membership_menu(query, context):
 • No Queue Waiting
 • Maximum Speed
 • Price: <b>399 Telegram Stars</b>
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 🌟 <b>YEARLY VIP PLAN</b>
 • Duration: <b>365 Days</b>
 • Daily Limit: <b>♾️ Unlimited</b>
@@ -611,7 +628,7 @@ async def show_membership_menu(query, context):
 • No Queue Waiting
 • Best Value
 • Price: <b>3,200 Telegram Stars</b> (Save ~33%)
-━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━
 {current_plan_text}
 
 ⚡ <b>Payment Method</b>
@@ -1256,6 +1273,16 @@ def check_crunchyroll(email, password, proxy=None):
     return result
 
 async def start(update: Update, context: CallbackContext):
+    if not await check_subscription(update, context):
+        await update.message.reply_text(
+            f"❌ <b>You must join the channel first!</b>\n\n"
+            f"📢 <a href='https://t.me/{CHANNEL_USERNAME.strip('@')}'>{CHANNEL_USERNAME}</a>\n\n"
+            f"After joining, type /start again.",
+            parse_mode='HTML',
+            disable_web_page_preview=True
+        )
+        return
+
     context.user_data['in_main_menu'] = True
     if not is_owner(update):
         await update.message.reply_text("❌ This bot is private.", parse_mode='HTML')
@@ -1355,6 +1382,10 @@ async def process_thread_count_input(update: Update, context: CallbackContext):
         return
 
 async def handle_message(update: Update, context: CallbackContext):
+    if not await check_subscription(update, context):
+        await update.message.reply_text("❌ Please join @caysredirect first!", parse_mode='HTML')
+        return
+
     if not is_owner(update):
         return
     
@@ -1441,6 +1472,10 @@ async def handle_message(update: Update, context: CallbackContext):
         return
 
 async def handle_document(update: Update, context: CallbackContext):
+    if not await check_subscription(update, context):
+        await update.message.reply_text("❌ Please join @caysredirect first!", parse_mode='HTML')
+        return
+
     if not is_owner(update):
         return
     
@@ -1750,6 +1785,10 @@ async def manage_result_pin(update: Update, context: CallbackContext, message_id
 async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     data = query.data
+
+    if not await check_subscription(update, context):
+        await query.answer("❌ You must join @caysredirect first!", show_alert=True)
+        return
 
     if not is_owner(update):
         await query.edit_message_text("❌ Access Denied.")
