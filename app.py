@@ -653,8 +653,8 @@ async def show_statistics_menu(query, context):
 📆 <b>Plan Expires In:</b> <code>{get_days_remaining(stats['expires'])}</code>
 📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
-🧵 <b>Threads:</b> <code>{limits['current_threads']} / {limits['max_threads']}</code>
-📁 <b>Files Today:</b> <code>{today_files_used} / {max_files}</code>
+🧵 <b>Threads:</b> <code>{limits['current_threads']}/{limits['max_threads']}</code>
+📁 <b>Files Today:</b> <code>{today_files_used}/{max_files}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ Total Scans: <code>{stats['total_scans']}</code>
@@ -918,68 +918,57 @@ Click on a mode below to switch:
         reply_markup=reply_markup
     )
 
-def format_single_result(result):
-    """Updated with USER, PLAN(SUB), MAX STREAMS, PAYMENT METHOD"""
+def format_hit_for_file(result, user_plan="FREE"):
+    """Tiered formatting for the downloaded Hits .txt file"""
+    country_code = result.get('country', 'ZZ').upper()
+    flag = REGION_HINTS.get(country_code, "🌍")
+    expiry_display = get_days_remaining(result['expiry']) if result.get('expiry') else 'N/A'
+
+    base = f"✅ HIT FOUND!\n"
+    base += f"📧 Email: {result['email']}\n"
+    base += f"🔑 Password: {result['password']}\n"
+    base += f"📊 Plan: {result['plan']}\n"
+    base += f"📆 Expires: {expiry_display}\n"
+    base += f"🌍 Country: {country_code} {flag}\n"
+
+    if user_plan == "FREE":
+        return base + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+    elif user_plan == "BASIC":
+        extra = f"• User: {result.get('username', 'Unknown')}\n"
+        extra += f"• Verified: {result['email_verified']}\n"
+        extra += f"• Free Trial: {result['free_trial']}\n"
+        return base + extra + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+    else:  # VIP / YEARLY - Full details
+        extra = f"• User: {result.get('username', 'Unknown')}\n"
+        extra += f"• Verified: {result['email_verified']}\n"
+        extra += f"• Created: {result['account_creation'] or 'N/A'}\n"
+        extra += f"• Free Trial: {result['free_trial']}\n"
+        extra += f"• Plan(SUB): {result.get('plan_sub', 'Unknown')}\n"
+        extra += f"• Max Streams: {result.get('max_streams', 'Unknown')}\n"
+        extra += f"• Currency: {result['currency'] or 'N/A'}\n"
+        extra += f"• Payment: {result.get('payment_method', 'Unknown')}\n"
+        return base + extra + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+def format_single_result(result, user_plan="FREE"):
+    """Tiered hit result based on user's plan"""
     country_code = result.get('country', 'ZZ').upper()
     flag = REGION_HINTS.get(country_code, "🌍")
 
-    # Full country name mapping (common ones)
     country_names = {
-        "BR": "Brazil",
-        "US": "United States",
-        "MX": "Mexico",
-        "CL": "Chile",
-        "FR": "France",
-        "DE": "Germany",
-        "IT": "Italy",
-        "ES": "Spain",
-        "GB": "United Kingdom",
-        "CA": "Canada",
-        "AU": "Australia",
-        "AR": "Argentina",
-        "CO": "Colombia",
-        "PE": "Peru",
-        "UY": "Uruguay",
-        "ZA": "South Africa",
-        "TR": "Turkey",
-        "NO": "Norway",
-        "NZ": "New Zealand",
-        "CR": "Costa Rica",
-        "ZZ": "Unknown",
+        "BR": "Brazil", "US": "United States", "MX": "Mexico", "CL": "Chile",
+        "FR": "France", "DE": "Germany", "IT": "Italy", "ES": "Spain",
+        "GB": "United Kingdom", "CA": "Canada", "AU": "Australia",
+        "AR": "Argentina", "CO": "Colombia", "PE": "Peru", "UY": "Uruguay",
+        "ZA": "South Africa", "TR": "Turkey", "NO": "Norway", "NZ": "New Zealand",
+        "CR": "Costa Rica", "ZZ": "Unknown",
     }
 
     country_name = country_names.get(country_code, country_code)
     country_display = f"{country_name} {flag}"
 
-    if result['success']:
-        expiry_display = get_days_remaining(result['expiry']) if result['expiry'] else 'N/A'
-
-        return f"""
-✅ <b>HIT FOUND!</b>
-
-📧 <b>Email:</b> <code>{result['email']}</code>
-🔑 <b>Password:</b> <code>{result['password']}</code>
-────────────────
-📊 <b>Account Details</b>
-• <b>User:</b> <code>{result.get('username', 'Unknown')}</code>
-• <b>Verified:</b> <code>{result['email_verified']}</code>
-• <b>Active:</b> <code>✅ {result['active']}</code>
-• <b>Created:</b> <code>{result['account_creation'] or 'N/A'}</code>
-• <b>Expires In:</b> <code>{expiry_display}</code>
-• <b>Free Trial:</b> <code>{result['free_trial']}</code>
-• <b>Plan:</b> <code>{result['plan']}</code>
-• <b>Plan(SUB):</b> <code>{result.get('plan_sub', 'Unknown')}</code>
-• <b>Max Stream:</b> <code>{result.get('max_streams', 'Unknown')}</code>
-• <b>Currency:</b> <code>{result['currency'] or 'N/A'}</code>
-• <b>Subscribable:</b> <code>{result['subscribable']}</code>
-• <b>Country:</b> <code>{country_display}</code>
-• <b>Payment:</b> <code>{result.get('payment_method', 'Unknown')}</code>
-
-┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
-Channel: {CHANNEL_USERNAME}
-        """.strip()
-
-    else:
+    if not result['success']:
         return f"""
 ❌ <b>CHECK FAILED</b>
 
@@ -989,6 +978,50 @@ Channel: {CHANNEL_USERNAME}
 
 Try another account!
         """.strip()
+
+    expiry_display = get_days_remaining(result['expiry']) if result['expiry'] else 'N/A'
+
+    # ==================== TIER-BASED FORMATTING ====================
+    base = f"""
+✅ <b>HIT FOUND!</b>
+
+📧 <b>Email:</b> <code>{result['email']}</code>
+🔑 <b>Password:</b> <code>{result['password']}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━
+📊 <b>Account Details</b>
+• <b>Active:</b> ✅ {result['active']}
+• <b>Plan:</b> <code>{result['plan']}</code>
+• <b>Expires In:</b> <code>{expiry_display}</code>
+• <b>Country:</b> <code>{country_display}</code>
+"""
+
+    if user_plan == "FREE":
+        # Basic only
+        extra = ""
+    elif user_plan == "BASIC":
+        # Medium
+        extra = f"""
+• <b>User:</b> <code>{result.get('username', 'Unknown')}</code>
+• <b>Verified:</b> <code>{result['email_verified']}</code>
+• <b>Free Trial:</b> <code>{result['free_trial']}</code>
+"""
+    else:  # VIP or YEARLY
+        # Full rich details
+        extra = f"""
+• <b>User:</b> <code>{result.get('username', 'Unknown')}</code>
+• <b>Verified:</b> <code>{result['email_verified']}</code>
+• <b>Created:</b> <code>{result['account_creation'] or 'N/A'}</code>
+• <b>Free Trial:</b> <code>{result['free_trial']}</code>
+• <b>Plan(SUB):</b> <code>{result.get('plan_sub', 'Unknown')}</code>
+• <b>Max Streams:</b> <code>{result.get('max_streams', 'Unknown')}</code>
+• <b>Currency:</b> <code>{result['currency'] or 'N/A'}</code>
+• <b>Payment:</b> <code>{result.get('payment_method', 'Unknown')}</code>
+"""
+
+    return (base + extra + f"""
+━━━━━━━━━━━━━━━━━━━━━━━━
+Channel: {CHANNEL_USERNAME}
+""").strip()
 
 def check_crunchyroll(email, password, proxy=None):
     """FINAL VERSION - Stronger Payment Method extraction"""
@@ -1362,8 +1395,12 @@ async def handle_message(update: Update, context: CallbackContext):
             )
             
             result = await run_blocking(check_crunchyroll, email, password)
-            
-            response = format_single_result(result)
+                        
+            # Get current user's plan
+            stats = get_user_stats()
+            user_plan = stats.get("plan", "FREE").upper()
+
+            response = format_single_result(result, user_plan)
             await status_msg.edit_text(response, parse_mode='HTML')
             
             # 🔥 AUTO PIN THE RESULT
@@ -1575,20 +1612,16 @@ async def handle_document(update: Update, context: CallbackContext):
     # ====================== HITS + BAD FILES ======================
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
+# ====================== FULL CAPTION HITS FILE (Tiered) ======================
     if hits_count > 0:
-        hits_text = "🎉 CRUNCHYROLL HITS - FULL DETAIL\n" + "="*70 + "\n\n"
+        # Get user's plan for tiered formatting
+        current_stats = get_user_stats()
+        user_plan = current_stats.get("plan", "FREE").upper()
+
+        hits_text = f"🎉 CRUNCHYROLL HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
+        
         for hit in hits:
-            country_code = hit.get('country', 'ZZ').upper()
-            flag = REGION_HINTS.get(country_code, "🌍")
-            expiry_display = get_days_remaining(hit['expiry']) if hit.get('expiry') else 'N/A'
-            
-            hits_text += f"✅ HIT FOUND!\n"
-            hits_text += f"📧 Email      : {hit['email']}\n"
-            hits_text += f"🔑 Password   : {hit['password']}\n"
-            hits_text += f"📊 Plan       : {hit['plan']}\n"
-            hits_text += f"📆 Expires    : {expiry_display}\n"
-            hits_text += f"🌍 Country    : {country_code} {flag}\n"
-            hits_text += f"━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            hits_text += format_hit_for_file(hit, user_plan)
 
         hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
         with open(hits_file, "w", encoding="utf-8") as f:
