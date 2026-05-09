@@ -318,6 +318,40 @@ async def check_subscription(update: Update, context: CallbackContext) -> bool:
         return member.status in ["member", "administrator", "creator", "restricted"]
     except:
         return False
+    
+# ============= VERIFICATION BUTTON MESSAGE =============
+async def send_join_channel_message(update: Update, context: CallbackContext):
+    """Shows clean message with Join button + Verify button"""
+    keyboard = [
+        [InlineKeyboardButton("📢 Join Channel", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+        [InlineKeyboardButton("✅ I've Joined - Verify", callback_data="verify_join")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    text = f"""
+<b>🚫 Access Restricted</b>
+━━━━━━━━━━━━━━━━━━━━━━━━
+You must be a member of our channel to use the bot.
+
+📢 <a href="https://t.me/{CHANNEL_USERNAME.strip('@')}">{CHANNEL_USERNAME}</a>
+
+After joining, tap the button below 👇
+    """.strip()
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            text=text,
+            parse_mode='HTML',
+            reply_markup=reply_markup,
+            disable_web_page_preview=True
+        )
+    else:
+        await update.message.reply_text(
+            text=text,
+            parse_mode='HTML',
+            reply_markup=reply_markup,
+            disable_web_page_preview=True
+        )
 
 # ============= BLOCKING RUNNER =============
 async def run_blocking(func, *args, **kwargs):
@@ -1274,13 +1308,7 @@ def check_crunchyroll(email, password, proxy=None):
 
 async def start(update: Update, context: CallbackContext):
     if not await check_subscription(update, context):
-        await update.message.reply_text(
-            f"❌ <b>You must join the channel first!</b>\n\n"
-            f"📢 <a href='https://t.me/{CHANNEL_USERNAME.strip('@')}'>{CHANNEL_USERNAME}</a>\n\n"
-            f"After joining, type /start again.",
-            parse_mode='HTML',
-            disable_web_page_preview=True
-        )
+        await send_join_channel_message(update, context)
         return
 
     stats = get_user_stats()
@@ -1378,7 +1406,7 @@ async def process_thread_count_input(update: Update, context: CallbackContext):
 
 async def handle_message(update: Update, context: CallbackContext):
     if not await check_subscription(update, context):
-        await update.message.reply_text("❌ Please join @caysredirect first!", parse_mode='HTML')
+        await send_join_channel_message(update, context)
         return
 
     if not is_owner(update):
@@ -1468,7 +1496,7 @@ async def handle_message(update: Update, context: CallbackContext):
 
 async def handle_document(update: Update, context: CallbackContext):
     if not await check_subscription(update, context):
-        await update.message.reply_text("❌ Please join @caysredirect first!", parse_mode='HTML')
+        await send_join_channel_message(update, context)
         return
 
     if not is_owner(update):
@@ -1781,8 +1809,18 @@ async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     data = query.data
 
+    # Handle verification button
+    if data == "verify_join":
+        if await check_subscription(update, context):
+            await edit_to_main_menu(update, context)   # or start(update, context) if you prefer
+        else:
+            await send_join_channel_message(update, context)
+        return
+
+    # Normal check for all other buttons
     if not await check_subscription(update, context):
         await query.answer("❌ You must join @caysredirect first!", show_alert=True)
+        await send_join_channel_message(update, context)
         return
 
     if not is_owner(update):
