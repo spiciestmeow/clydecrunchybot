@@ -1396,8 +1396,8 @@ async def handle_document(update: Update, context: CallbackContext):
     limits = get_plan_limits(stats)
     max_files = limits.get("multi_scan_max_files", 1)
 
-    reset_daily_if_needed(stats)   # Reset if new day
-    stats = get_user_stats()       # Refresh after reset
+    reset_daily_if_needed(stats)
+    stats = get_user_stats()
 
     if stats.get("today_files", 0) >= max_files:
         await update.message.reply_text(
@@ -1408,11 +1408,9 @@ async def handle_document(update: Update, context: CallbackContext):
         )
         return
 
-    # Increment daily file counter
     update_user_stats({"today_files": stats.get("today_files", 0) + 1})
-
-    # ←←← ADD THIS LINE (lifetime total)
     update_user_stats({"total_combo_files": stats.get("total_combo_files", 0) + 1})
+    # =====================================================================
 
     # ====================== Normal file processing ======================
     file = await context.bot.get_file(document.file_id)
@@ -1431,6 +1429,24 @@ async def handle_document(update: Update, context: CallbackContext):
         return
     
     total = len(accounts)
+
+    # ==================== IMPROVED DAILY SCAN LIMIT CHECK ====================
+    if limits["daily_limit"] is not None:   # FREE and BASIC have limits
+        used = stats.get("today_scans", 0)
+        remaining = limits["daily_limit"] - used
+
+        if total > remaining:
+            await update.message.reply_text(
+                f"❌ <b>Not enough scans left today!</b>\n\n"
+                f"• You have <b>{remaining}</b> scans remaining\n"
+                f"• This file contains <b>{total}</b> accounts\n\n"
+                f"Please send a smaller file (maximum <b>{remaining}</b> lines) or wait until tomorrow.",
+                parse_mode='HTML'
+            )
+            return
+    # =====================================================================
+
+    # ====================== Continue with normal scanning ======================
     hits = []
     start_time = time.time()
 
@@ -1600,6 +1616,10 @@ async def edit_to_main_menu(update_or_query, context):
     stats = get_user_stats()
     limits = get_plan_limits(stats)
     
+    # File statistics for dashboard
+    max_files = limits.get("multi_scan_max_files", 1)
+    today_files = stats.get("today_files", 0)
+
     keyboard = [
         [
             InlineKeyboardButton("📊 My Stats", callback_data="menu_stats"),
@@ -1625,6 +1645,7 @@ async def edit_to_main_menu(update_or_query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
+📁 Files Today: <code><b>{today_files}/{max_files}</b></code>
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
