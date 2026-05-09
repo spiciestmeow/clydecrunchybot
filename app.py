@@ -132,26 +132,33 @@ def get_mode_display(mode_key: str = None) -> str:
     mode_info = MODES[mode_key]
     return f"{mode_info['icon']} {mode_info['display']}"
 
-# ============= PLAN CONFIG (exactly from your screenshot) =============
+# ============= PLAN CONFIG =============
 PLAN_CONFIG = {
     "FREE": {
         "display_name": "FREE",
-        "daily_limit": 5000,
-        "max_threads": 10,
+        "daily_limit": 15,
+        "max_threads": 8,
         "multi_scan_max_files": 1,
         "queue_waiting": True
     },
     "BASIC": {
         "display_name": "BASIC PLAN (WEEKLY)",
-        "daily_limit": 25000,
-        "max_threads": 75,
+        "daily_limit": 100,
+        "max_threads": 25,
         "multi_scan_max_files": 3,
         "queue_waiting": False
     },
     "VIP": {
         "display_name": "VIP PLAN (MONTHLY)",
-        "daily_limit": None,
-        "max_threads": 125,
+        "daily_limit": None,          # Unlimited
+        "max_threads": 40,
+        "multi_scan_max_files": 5,
+        "queue_waiting": False
+    },
+    "YEARLY": {
+        "display_name": "YEARLY VIP",
+        "daily_limit": None,          # Unlimited
+        "max_threads": 40,
         "multi_scan_max_files": 5,
         "queue_waiting": False
     }
@@ -182,21 +189,27 @@ class RateLimiter:
 PLAN_DEFAULTS = {
     "FREE": {
         "plan": "FREE",
-        "base_plan_limit": 5000,
-        "threads": 10,
+        "base_plan_limit": 15,
+        "threads": 8,
         "expires": "N/A"
     },
     "BASIC": {
         "plan": "BASIC",
-        "base_plan_limit": 25000,
-        "threads": 75,
+        "base_plan_limit": 100,
+        "threads": 25   ,
         "expires": (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
     },
     "VIP": {
         "plan": "VIP",
         "base_plan_limit": 999999,   # practically unlimited
-        "threads": 125,
+        "threads": 40,
         "expires": (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    },
+    "YEARLY": {
+        "plan": "YEARLY",
+        "base_plan_limit": 999999,
+        "threads": 40,
+        "expires": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
     }
 }
 
@@ -247,24 +260,21 @@ def get_days_remaining(expires_str: str) -> str:
         return expires_str
 
 def get_plan_limits(stats: dict):
-    """Returns dynamic limits — now respects 24h reward timer"""
     plan_key = stats.get("plan", "FREE").upper()
     config = PLAN_CONFIG.get(plan_key, PLAN_CONFIG["FREE"])
     
     base_limit = config["daily_limit"]
     
-    # Add bonuses (daily reward + referral)
     daily_reward_lines = stats.get("daily_reward_lines", 0)
     if not is_daily_reward_active(stats):
         daily_reward_lines = 0
     
-    # Dynamic referral bonus
     referral_bonus_per = get_referral_bonus_per_referral(stats.get("plan", "FREE"))
     total_referral_bonus = stats.get("referrals", 0) * referral_bonus_per
     
     bonus_lines = daily_reward_lines + total_referral_bonus
     
-    if base_limit is None:  # VIP = unlimited
+    if base_limit is None:  # VIP & YEARLY = unlimited
         daily_limit = None
         remaining_text = "♾️"
         base_limit_text = "♾️"
@@ -546,28 +556,35 @@ async def show_membership_menu(query, context):
 👑 <b>MEMBERSHIP PLANS</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🆓 <b>FREE PLAN</b>
-• Daily Limit: 5,000 lines
-• Max Threads: 1-10
-• Single scan at a time
+• Daily Limit: 15 combos/day
+• Max Threads: 1-8
+• Single + Small Bulk (max 10 lines)
 • Queue Waiting System
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ <b>BASIC PLAN (WEEKLY)</b>
-• Duration: 7 Days
-• Daily Limit: 25,000 lines
-• Max Threads: 1-75
-• Multi-Scan: Up to 3 files
+• Duration: 7 Days  
+• Daily Limit: 100 combos/day
+• Max Threads: 1-25
+• Bulk: Up to 40 lines per file
 • No Queue Waiting
 • Priority Support
-• Price: <b>200 Telegram Stars</b>
+• Price: <b>130 Telegram Stars</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👑 <b>VIP PLAN (MONTHLY)</b>
 • Duration: 30 Days
-• Daily Limit: Unlimited lines
-• Max Threads: 1-125
-• Multi-Scan: Up to 5 files
-• No Queue Waiting
-• ALL IN ONE Scanner Mode
-• Price: <b>600 Telegram Stars</b>
+• Daily Limit: Unlimited (soft cap ~450/day)
+• Max Threads: 1-40
+• Bulk: Up to 120 lines per file
+• Fast Priority + Full Stats
+• Price: <b>399 Telegram Stars</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🌟 <b>YEARLY VIP PLAN</b>
+• Duration: 365 Days
+• Daily Limit: Unlimited (soft ~600/day)
+• Max Threads: 1-40
+• Bulk: Up to 200 lines per file
+• All VIP Benefits + Best Value
+• Price: <b>3,200 Telegram Stars</b> (Save ~33%)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {current_plan_text}
 
@@ -675,9 +692,8 @@ async def set_plan_command(update: Update, context: CallbackContext):
         await update.message.reply_text(
             "📋 <b>Usage:</b>\n\n"
             "<code>/setplan VIP</code> → update yourself\n"
-            "<code>/setplan 1234567890 VIP</code> → update by user ID\n"
-            "<code>/setplan @username VIP</code> → update by username\n\n"
-            "Available plans: FREE, BASIC, VIP",
+            "<code>/setplan 1234567890 YEARLY</code> → update by user ID\n\n"
+            "Available plans: FREE, BASIC, VIP, YEARLY",
             parse_mode='HTML'
         )
         return
@@ -707,7 +723,7 @@ async def set_plan_command(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Wrong usage. Check /setplan for help.")
         return
 
-    if new_plan not in ["FREE", "BASIC", "VIP"]:
+    if new_plan not in ["FREE", "BASIC", "VIP", "YEARLY"]:
         await update.message.reply_text("❌ Invalid plan! Use: FREE, BASIC, or VIP")
         return
 
@@ -716,8 +732,10 @@ async def set_plan_command(update: Update, context: CallbackContext):
         expires = "N/A"
     elif new_plan == "BASIC":
         expires = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
-    else:  # VIP
+    elif new_plan == "VIP":
         expires = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+    elif new_plan == "YEARLY":
+        expires = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
 
     defaults = PLAN_DEFAULTS[new_plan]
 
