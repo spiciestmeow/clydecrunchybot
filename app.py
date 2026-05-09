@@ -661,7 +661,7 @@ async def show_statistics_menu(query, context):
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
 
 async def reset_reward_command(update: Update, context: CallbackContext):
-    """Admin command to reset daily reward timer for yourself or any user"""
+    """Admin command to reset ALL daily counters + reward timer"""
     if not is_owner(update):
         await update.message.reply_text("❌ This command is only for the owner.")
         return
@@ -673,11 +673,19 @@ async def reset_reward_command(update: Update, context: CallbackContext):
         try:
             target_user_id = int(args[0])
         except ValueError:
-            await update.message.reply_text("❌ Invalid user ID. Use: `/resetreward` or `/resetreward 1234567890`")
+            await update.message.reply_text(
+                "❌ Invalid user ID.\n\n"
+                "Usage:\n"
+                "`/resetreward` → reset yourself\n"
+                "`/resetreward 1234567890` → reset specific user",
+                parse_mode='HTML'
+            )
             return
 
-    # Reset reward data
+    # Reset ALL daily-related data
     success = update_user_stats_general(target_user_id, {
+        "today_scans": 0,
+        "today_files": 0,
         "daily_reward_lines": 0,
         "daily_reward_claimed": False,
         "daily_reward_last_claimed": None
@@ -685,13 +693,14 @@ async def reset_reward_command(update: Update, context: CallbackContext):
 
     if success:
         await update.message.reply_text(
-            f"✅ Daily reward timer has been <b>reset</b> for user <code>{target_user_id}</code>.\n"
-            "They can now claim again immediately.",
+            f"✅ <b>All daily limits have been reset</b> for user <code>{target_user_id}</code>.\n\n"
+            f"• Daily Scans → 0\n"
+            f"• Daily Files → 0\n"
+            f"• Daily Reward → Ready to claim again",
             parse_mode='HTML'
         )
     else:
         await update.message.reply_text(f"❌ User {target_user_id} not found or never used the bot.")
-
 async def set_plan_command(update: Update, context: CallbackContext):
     if not is_owner(update):
         await update.message.reply_text("❌ This command is only for the owner.")
