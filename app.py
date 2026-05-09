@@ -637,6 +637,7 @@ async def show_statistics_menu(query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ Total Scans: <code>{stats['total_scans']}</code>
+📁 Total Files Processed: <code>{total_files}</code>
 💎 Total Hits: <code>{stats['total_hits']}</code>
 ❌ Total Bad: <code>{stats.get('total_free', 0)}</code>
 🎯 Success Rate: <code>{success_rate}%</code>
@@ -652,7 +653,6 @@ async def show_statistics_menu(query, context):
 ✨ Daily Reward Lines (Active): <code>{stats['daily_reward_lines']}</code> {get_remaining_reward_time(stats) if is_daily_reward_active(stats) else ''}
 👥 Referral Bonus Lines: <code>+{stats['referral_bonus_lines']}</code>
 📦 Base Plan Limit: <code>{limits['base_limit_text']}</code>
-📁 Total Files Processed: <code>{total_files}</code>
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
@@ -1410,9 +1410,9 @@ async def handle_document(update: Update, context: CallbackContext):
 
     if stats.get("today_files", 0) >= max_files:
         await update.message.reply_text(
-            f"❌ Daily file limit reached!\n"
-            f"Your <b>{limits['display_name']}</b> plan allows only <b>{max_files}</b> file(s) per day.\n"
-            f"Come back tomorrow or upgrade your plan.",
+            f"❌ <b>Daily file limit reached!</b>\n\n"
+            f"Your <b>{limits['display_name']}</b> plan allows only <b>{max_files}</b> file{'' if max_files == 1 else 's'} per day.\n\n"
+            f"Come back tomorrow or upgrade your plan to send more files.",
             parse_mode='HTML'
         )
         return
