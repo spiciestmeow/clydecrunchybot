@@ -1384,8 +1384,8 @@ async def handle_message(update: Update, context: CallbackContext):
             if limits["daily_limit"] is not None:
                 if stats["today_scans"] + 1 > limits["daily_limit"]:
                     await update.message.reply_text(
-                        f"❌ Daily limit reached!\n"
-                        f"You have already used {stats['today_scans']}/{limits['daily_limit']} scans today.\n"
+                        f"<b>❌ Daily limit reached!</b>\n\n"
+                        f"You have already used <b>{stats['today_scans']}/{limits['daily_limit']}</b> scans today.\n"
                         f"Upgrade your plan or wait until tomorrow.",
                         parse_mode='HTML'
                     )
@@ -1466,7 +1466,7 @@ async def handle_document(update: Update, context: CallbackContext):
 
     if limits["display_name"] == "FREE":
         await update.message.reply_text(
-            f"❌ <b>FREE plan limitation</b>\n\n"
+            f"❌ <b>FREE Plan limitation</b>\n\n"
             f"Bulk file upload is not available on FREE plan.\n"
             f"Please use single checks (<code>email:password</code>) or upgrade to BASIC/VIP.",
             parse_mode='HTML'
