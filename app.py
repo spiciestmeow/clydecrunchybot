@@ -1072,7 +1072,6 @@ Try another account!
 • <b>Currency:</b> <code>{result['currency'] or 'N/A'}</code>
 • <b>Payment:</b> <code>{result.get('payment_method', 'Unknown')}</code>
 """
-
     return (base + extra + f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Channel: {CHANNEL_USERNAME}
