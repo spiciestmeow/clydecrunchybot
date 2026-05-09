@@ -164,27 +164,6 @@ PLAN_CONFIG = {
     }
 }
 
-class RateLimiter:
-    """Best proxyless rate limiter - controls total requests per second"""
-    def __init__(self, max_rps: int = 35):
-        self.max_rps = max_rps
-        self.lock = threading.Lock()
-        self.tokens = 0
-        self.last_refill = time.time()
-
-    def acquire(self):
-        """Wait until we can send the next request"""
-        while True:
-            with self.lock:
-                now = time.time()
-                if now - self.last_refill >= 1.0:
-                    self.tokens = self.max_rps
-                    self.last_refill = now
-                if self.tokens > 0:
-                    self.tokens -= 1
-                    return
-            time.sleep(0.008)
-
 # ============= PLAN DEFAULTS FOR /setplan COMMAND =============
 PLAN_DEFAULTS = {
     "FREE": {
@@ -213,6 +192,27 @@ PLAN_DEFAULTS = {
     }
 }
 
+class RateLimiter:
+    """Best proxyless rate limiter - controls total requests per second"""
+    def __init__(self, max_rps: int = 35):
+        self.max_rps = max_rps
+        self.lock = threading.Lock()
+        self.tokens = 0
+        self.last_refill = time.time()
+
+    def acquire(self):
+        """Wait until we can send the next request"""
+        while True:
+            with self.lock:
+                now = time.time()
+                if now - self.last_refill >= 1.0:
+                    self.tokens = self.max_rps
+                    self.last_refill = now
+                if self.tokens > 0:
+                    self.tokens -= 1
+                    return
+            time.sleep(0.008)
+
 # ============= IMPROVED UA + DEVICE ROTATION (Point 2) =============
 def generate_random_user_agent():
     """Much better and more realistic UAs (including official Crunchyroll app)"""
@@ -225,7 +225,6 @@ def generate_random_user_agent():
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
     ]
     return random.choice(user_agents)
-
 
 def generate_random_device_info():
     """Better device fingerprinting"""
@@ -369,6 +368,7 @@ def get_user_stats():
         "total_combo_files": 0,
         "today_date": str(date.today()),
         "today_scans": 0,
+        "today_files": 0,
         "referrals": 0,
         "referral_code": generate_referral_code(ADMIN_ID),
         "referred_by": None,
@@ -390,13 +390,14 @@ def update_user_stats(data: dict):
     supabase.table("user_stats").update(data).eq("user_id", ADMIN_ID).execute()
 
 def reset_daily_if_needed(stats: dict):
-    """Automatically reset daily scans if it's a new day"""
+    """Automatically reset daily scans AND daily files if it's a new day"""
     if stats.get("today_date") != str(date.today()):
         update_user_stats({
             "today_scans": 0,
+            "today_files": 0,          # ← NEW
             "today_date": str(date.today())
         })
-        return True  # reset happened
+        return True
     return False
 
 def update_user_stats_general(user_id: int, data: dict):
@@ -544,7 +545,7 @@ async def claim_daily_reward(query, context):
     
     await show_rewards_menu(query, context)
 
-# ============= MEMBERSHIP PLAN MENU (Exact match to your screenshot) =============
+# ============= MEMBERSHIP PLAN MENU (Updated to match PLAN_CONFIG) =============
 async def show_membership_menu(query, context):
     context.user_data['in_main_menu'] = False
     stats = get_user_stats()
@@ -556,43 +557,45 @@ async def show_membership_menu(query, context):
 👑 <b>MEMBERSHIP PLANS</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🆓 <b>FREE PLAN</b>
-• Daily Limit: 15 combos/day
-• Max Threads: 1-8
-• Single + Small Bulk (max 10 lines)
+• Daily Limit: <b>15 combos/day</b>
+• Max Threads: <b>1-8</b>
+• Multi-Scan: <b>1 file only</b>
 • Queue Waiting System
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ <b>BASIC PLAN (WEEKLY)</b>
-• Duration: 7 Days  
-• Daily Limit: 100 combos/day
-• Max Threads: 1-25
-• Bulk: Up to 40 lines per file
+• Duration: <b>7 Days</b>
+• Daily Limit: <b>100 combos/day</b>
+• Max Threads: <b>1-25</b>
+• Multi-Scan: <b>Up to 3 files</b>
 • No Queue Waiting
-• Priority Support
+• Faster Processing
 • Price: <b>130 Telegram Stars</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 👑 <b>VIP PLAN (MONTHLY)</b>
-• Duration: 30 Days
-• Daily Limit: Unlimited (soft cap ~450/day)
-• Max Threads: 1-40
-• Bulk: Up to 120 lines per file
-• Fast Priority + Full Stats
+• Duration: <b>30 Days</b>
+• Daily Limit: <b>♾️ Unlimited</b>
+• Max Threads: <b>1-40</b>
+• Multi-Scan: <b>Up to 5 files</b>
+• No Queue Waiting
+• Maximum Speed
 • Price: <b>399 Telegram Stars</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🌟 <b>YEARLY VIP PLAN</b>
-• Duration: 365 Days
-• Daily Limit: Unlimited (soft ~600/day)
-• Max Threads: 1-40
-• Bulk: Up to 200 lines per file
-• All VIP Benefits + Best Value
+• Duration: <b>365 Days</b>
+• Daily Limit: <b>♾️ Unlimited</b>
+• Max Threads: <b>1-40</b>
+• Multi-Scan: <b>Up to 5 files</b>
+• No Queue Waiting
+• Best Value + All VIP Benefits
 • Price: <b>3,200 Telegram Stars</b> (Save ~33%)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {current_plan_text}
 
-⚠️ <b>Payment Method</b>
+⚡ <b>Payment Method</b>
 Telegram Stars only (currently accepted)
 
 💳 To Purchase A Membership
-Contact: @caydigitals
+Contact: <a href="https://t.me/caydigitals">@caydigitals</a>
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
@@ -611,9 +614,14 @@ async def show_statistics_menu(query, context):
         update_user_stats({"today_scans": 0, "today_date": str(date.today())})
         stats = get_user_stats()  # Refresh after reset
     
-    limits = get_plan_limits(stats)   # ← MOVED OUTSIDE the if-block
+    limits = get_plan_limits(stats)
 
     success_rate = round((stats["total_hits"] / stats["total_scans"] * 100), 2) if stats["total_scans"] > 0 else 0.0
+
+    # New file statistics
+    max_files = limits.get("multi_scan_max_files", 1)
+    today_files = stats.get("today_files", 0)
+    total_files = stats.get("total_combo_files", 0)
 
     text = f"""
 📊 <b>Your Statistics</b>
@@ -625,6 +633,7 @@ async def show_statistics_menu(query, context):
 📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <code>{limits['current_threads']} / {limits['max_threads']}</code>
+📁 <b>Files Today:</b> <code>{today_files} / {max_files}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ Total Scans: <code>{stats['total_scans']}</code>
@@ -643,6 +652,7 @@ async def show_statistics_menu(query, context):
 ✨ Daily Reward Lines (Active): <code>{stats['daily_reward_lines']}</code> {get_remaining_reward_time(stats) if is_daily_reward_active(stats) else ''}
 👥 Referral Bonus Lines: <code>+{stats['referral_bonus_lines']}</code>
 📦 Base Plan Limit: <code>{limits['base_limit_text']}</code>
+📁 <b>Total Files Processed:</b> <code>{total_files}</code>
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
@@ -810,15 +820,16 @@ async def handle_set_threads(query, context):
     plan = limits["display_name"]
     max_t = limits["max_threads"]
     
+    # New updated limits based on your current PLAN_CONFIG
     text = f"""
 <b>Set Thread Count</b>
 
 Limits by plan:
-🆓 FREE: 1-10
-⭐ BASIC: 1-75
-👑 VIP: 1-125
+🆓 FREE: <b>1-8</b>
+⭐ BASIC: <b>1-25</b>
+👑 VIP / YEARLY: <b>1-40</b>
 
-Your plan <b>{plan}</b> allows 1-{max_t} threads.
+Your plan <b>{plan}</b> allows <b>1-{max_t}</b> threads.
 
 Current threads: <b>{limits['current_threads']}</b>
 
@@ -1374,7 +1385,31 @@ async def handle_document(update: Update, context: CallbackContext):
     if not document.file_name.endswith('.txt'):
         await update.message.reply_text("❌ Please send a .txt file only!", parse_mode='HTML')
         return
-    
+
+    # ==================== DAILY FILE LIMIT ENFORCEMENT ====================
+    stats = get_user_stats()
+    limits = get_plan_limits(stats)
+    max_files = limits.get("multi_scan_max_files", 1)
+
+    reset_daily_if_needed(stats)   # Reset if new day
+    stats = get_user_stats()       # Refresh after reset
+
+    if stats.get("today_files", 0) >= max_files:
+        await update.message.reply_text(
+            f"❌ Daily file limit reached!\n"
+            f"Your <b>{limits['display_name']}</b> plan allows only <b>{max_files}</b> file(s) per day.\n"
+            f"Come back tomorrow or upgrade your plan.",
+            parse_mode='HTML'
+        )
+        return
+
+    # Increment daily file counter
+    update_user_stats({"today_files": stats.get("today_files", 0) + 1})
+
+    # ←←← ADD THIS LINE (lifetime total)
+    update_user_stats({"total_combo_files": stats.get("total_combo_files", 0) + 1})
+
+    # ====================== Normal file processing ======================
     file = await context.bot.get_file(document.file_id)
     file_content = await file.download_as_bytearray()
     lines = file_content.decode('utf-8', errors='ignore').splitlines()
@@ -1395,17 +1430,15 @@ async def handle_document(update: Update, context: CallbackContext):
     start_time = time.time()
 
     stats = get_user_stats()
-    reset_daily_if_needed(stats)
-    stats = get_user_stats()
     limits = get_plan_limits(stats)
     user_threads = limits["current_threads"]
 
     # ================= BEST PROXYLESS RATE LIMITER =================
     if limits["display_name"] == "FREE":
-        max_rps = 12          # was 22
+        max_rps = 12
     elif "BASIC" in limits["display_name"]:
-        max_rps = 22          # was 33
-    else:  # VIP
+        max_rps = 22
+    else:  # VIP / YEARLY
         max_rps = 32
     rate_limiter = RateLimiter(max_rps=max_rps)
 
@@ -1489,7 +1522,7 @@ async def handle_document(update: Update, context: CallbackContext):
     await progress_msg.edit_text(summary, parse_mode='HTML')
     await manage_result_pin(update, context, progress_msg.message_id)
 
-    # ====================== FULL CAPTION HITS FILE ======================
+    # ====================== HITS + BAD FILES ======================
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     
     if hits_count > 0:
@@ -1526,7 +1559,6 @@ async def handle_document(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
 
-# Bad file (kept simple)
     if bad_count > 0:
         bad_text = "EMAIL:PASSWORD | STATUS\n" + "="*40 + "\n"
         hit_emails = {hit['email'] for hit in hits}
