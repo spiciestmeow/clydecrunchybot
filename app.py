@@ -66,6 +66,20 @@ def is_daily_reward_active(stats: dict) -> bool:
     except:
         return False
 
+def clean_expired_daily_reward(stats: dict):
+    """Automatically clean up expired rewards so Stats/Rewards menu shows correct values"""
+    if is_daily_reward_active(stats):
+        return stats
+    
+    # Expired → reset everything
+    if stats.get('daily_reward_lines', 0) > 0 or stats.get('daily_reward_claimed', False):
+        update_user_stats({
+            "daily_reward_lines": 0,
+            "daily_reward_claimed": False
+        })
+        stats['daily_reward_lines'] = 0
+        stats['daily_reward_claimed'] = False
+    return stats
 
 def get_remaining_reward_time(stats: dict) -> str:
     """Returns countdown like '23:45:12' or 'Ready to Claim!'"""
@@ -315,6 +329,7 @@ def get_user_stats():
     response = supabase.table("user_stats").select("*").eq("user_id", ADMIN_ID).execute()
     if response.data:
         stats = response.data[0]
+        stats = clean_expired_daily_reward(stats)
         
         # Auto-generate referral code if missing (for existing users)
         if not stats.get('referral_code'):
@@ -462,6 +477,7 @@ async def show_rewards_menu(query, context):
     context.user_data['in_main_menu'] = False
     
     stats = get_user_stats()
+    stats = clean_expired_daily_reward(stats)
     is_active = is_daily_reward_active(stats)
     
     if is_active:
@@ -492,8 +508,9 @@ Claim your daily free lines or redeem premium gift codes provided by the admin.
         parse_mode='HTML',
         reply_markup=reply_markup
     )
+
 async def claim_daily_reward(query, context):
-    """Personal 24-hour reward timer"""
+    """Personal 24-hour reward timer — FIXED"""
     stats = get_user_stats()
     
     if is_daily_reward_active(stats):
@@ -501,13 +518,13 @@ async def claim_daily_reward(query, context):
         await show_rewards_menu(query, context)
         return
     
+    # FIXED: Reset old reward instead of adding to it
     reward_amount = random.randint(400, 1200)
-    new_lines = stats.get('daily_reward_lines', 0) + reward_amount
     
     update_user_stats({
-        "daily_reward_lines": new_lines,
+        "daily_reward_lines": reward_amount,           # ← Reset (don't add!)
         "daily_reward_claimed": True,
-        "daily_reward_last_claimed": datetime.utcnow().isoformat()   # full timestamp
+        "daily_reward_last_claimed": datetime.utcnow().isoformat()
     })
     
     await query.answer(
@@ -570,7 +587,8 @@ Contact: @caydigitals
 async def show_statistics_menu(query, context):
     context.user_data['in_main_menu'] = False
     stats = get_user_stats()
-    
+    stats = clean_expired_daily_reward(stats)
+
     # Auto reset daily stats if new day
     if stats["today_date"] != str(date.today()):
         update_user_stats({"today_scans": 0, "today_date": str(date.today())})
