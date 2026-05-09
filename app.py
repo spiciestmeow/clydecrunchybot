@@ -1809,12 +1809,22 @@ async def button_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     data = query.data
 
+async def button_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    data = query.data
+
     # Handle verification button
     if data == "verify_join":
         if await check_subscription(update, context):
-            await edit_to_main_menu(update, context)   # or start(update, context) if you prefer
+            await edit_to_main_menu(update, context)
         else:
-            await send_join_channel_message(update, context)
+            # ←←← THIS IS THE FIX
+            await query.answer(
+                "❌ You haven't joined the channel yet!\n\n"
+                "Please join @caysredirect first, then tap Verify again.",
+                show_alert=True
+            )
+            # Do NOT call send_join_channel_message again (prevents the error)
         return
 
     # Normal check for all other buttons
@@ -1826,6 +1836,8 @@ async def button_callback(update: Update, context: CallbackContext):
     if not is_owner(update):
         await query.edit_message_text("❌ Access Denied.")
         return
+
+    # ... rest of your button_callback code stays exactly the same
 
     if data == "menu_stats":
             context.user_data['in_main_menu'] = False
