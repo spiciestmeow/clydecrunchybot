@@ -1055,8 +1055,8 @@ def format_hit_for_file(result, user_plan="FREE", mode="Crunchyroll"):
             extra += f"• Payment: {result.get('payment_method', 'Unknown')}\n"
             return base + extra + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
-def format_single_result(result, user_plan="FREE"):
-    """Tiered hit result based on user's plan"""
+def format_single_result(result, user_plan="FREE", mode="Crunchyroll"):
+    """Mode-aware formatting: Crunchyroll keeps original tiered look, Vivamax gets rich display"""
     country_code = result.get('country', 'ZZ').upper()
     flag = REGION_HINTS.get(country_code, "🌍")
 
@@ -1066,65 +1066,86 @@ def format_single_result(result, user_plan="FREE"):
         "GB": "United Kingdom", "CA": "Canada", "AU": "Australia",
         "AR": "Argentina", "CO": "Colombia", "PE": "Peru", "UY": "Uruguay",
         "ZA": "South Africa", "TR": "Turkey", "NO": "Norway", "NZ": "New Zealand",
-        "CR": "Costa Rica", "ZZ": "Unknown",
+        "CR": "Costa Rica", "PH": "Philippines", "ZZ": "Unknown",
     }
-
     country_name = country_names.get(country_code, country_code)
     country_display = f"{country_name} {flag}"
 
-    if not result['success']:
+    if not result.get('success', False):
         return f"""
 ❌ <b>CHECK FAILED</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 
-📌 <b>Status:</b> {result['message']}
+📌 <b>Status:</b> {result.get('message', 'Unknown error')}
 
 Try another account!
         """.strip()
 
-    expiry_display = get_days_remaining(result['expiry']) if result['expiry'] else 'N/A'
+    expiry_display = get_days_remaining(result.get('expiry')) if result.get('expiry') else 'N/A'
 
-    # ==================== TIER-BASED FORMATTING ====================
-    base = f"""
+    if mode == "Vivamax":
+        # === RICH VIVAMAX FORMAT (same style as your standalone script) ===
+        text = f"""
+✅ <b>VIVAMAX HIT FOUND!</b>
+
+📧 <b>Email:</b> <code>{result['email']}</code>
+🔑 <b>Password:</b> <code>{result['password']}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━
+👤 <b>Name:</b> <code>{result.get('displayName', result.get('username', 'N/A'))}</code>
+📊 <b>Status:</b> <code>{result.get('status', 'UNKNOWN')}</code>
+📌 <b>Plan:</b> <code>{result.get('plan', 'Unknown')}</code>
+💰 <b>Price:</b> <code>{result.get('price', 'N/A')}</code>
+📆 <b>Billing:</b> <code>{result.get('billing', 'N/A')}</code>
+📅 <b>Expires:</b> <code>{expiry_display}</code>
+⏳ <b>Days Left:</b> <code>{result.get('days_left', 'N/A')}</code>
+🔄 <b>Auto Renew:</b> <code>{result.get('auto_renew', '—')}</code>
+🔐 <b>PIN:</b> <code>{result.get('pin', 'N/A')}</code>
+📱 <b>Mobile:</b> <code>{result.get('mobile', 'N/A')}</code>
+🌍 <b>Country:</b> <code>{country_display}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━
+Channel: {CHANNEL_USERNAME}
+        """.strip()
+    else:
+        # === ORIGINAL CRUNCHYROLL TIERED FORMAT (unchanged) ===
+        base = f"""
 ✅ <b>HIT FOUND!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Account Details</b>
-• <b>Active:</b> ✅ {result['active']}
-• <b>Plan:</b> <code>{result['plan']}</code>
+• <b>Active:</b> ✅ {result.get('active', 'False')}
+• <b>Plan:</b> <code>{result.get('plan', 'None')}</code>
 • <b>Expires In:</b> <code>{expiry_display}</code>
 • <b>Country:</b> <code>{country_display}</code>
 """
 
     if user_plan == "FREE":
-        # Basic only
         extra = ""
     elif user_plan == "BASIC":
-        # Medium
         extra = f"""
 • <b>User:</b> <code>{result.get('username', 'Unknown')}</code>
-• <b>Verified:</b> <code>{result['email_verified']}</code>
-• <b>Free Trial:</b> <code>{result['free_trial']}</code>
+• <b>Verified:</b> <code>{result.get('email_verified', 'No')}</code>
+• <b>Free Trial:</b> <code>{result.get('free_trial', 'False')}</code>
 """
-    else:  # VIP or YEARLY
-        # Full rich details
-        extra = f"""
+    else:  # VIP / YEARLY
+            extra = f"""
 • <b>User:</b> <code>{result.get('username', 'Unknown')}</code>
-• <b>Verified:</b> <code>{result['email_verified']}</code>
-• <b>Created:</b> <code>{result['account_creation'] or 'N/A'}</code>
-• <b>Free Trial:</b> <code>{result['free_trial']}</code>
+• <b>Verified:</b> <code>{result.get('email_verified', 'No')}</code>
+• <b>Created:</b> <code>{result.get('account_creation', 'N/A')}</code>
+• <b>Free Trial:</b> <code>{result.get('free_trial', 'False')}</code>
 • <b>Plan(SUB):</b> <code>{result.get('plan_sub', 'Unknown')}</code>
 • <b>Max Streams:</b> <code>{result.get('max_streams', 'Unknown')}</code>
-• <b>Currency:</b> <code>{result['currency'] or 'N/A'}</code>
+• <b>Currency:</b> <code>{result.get('currency', 'N/A')}</code>
 • <b>Payment:</b> <code>{result.get('payment_method', 'Unknown')}</code>
 """
-    return (base + extra + f"""
+    text = (base + extra + f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Channel: {CHANNEL_USERNAME}
 """).strip()
+
+    return text
 
 
 def check_vivamax(email: str, password: str, proxy=None):
@@ -1672,11 +1693,12 @@ async def handle_message(update: Update, context: CallbackContext):
             checker = get_checker_function(mode, user_id)
             result = await run_blocking(checker, email, password)
                         
-            # Get current user's plan
+            # Get current user's plan + mode
             stats = get_user_stats(user_id)
             user_plan = stats.get("plan", "FREE").upper()
+            mode = stats.get("api_mode", "Crunchyroll")
 
-            response = format_single_result(result, user_plan)
+            response = format_single_result(result, user_plan, mode)
             await status_msg.edit_text(response, parse_mode='HTML')
             
             # 🔥 AUTO PIN THE RESULT
