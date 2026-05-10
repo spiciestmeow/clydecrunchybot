@@ -1682,6 +1682,18 @@ async def handle_message(update: Update, context: CallbackContext):
                         parse_mode='HTML'
                     )
                     return
+                
+            # ====================== RATE LIMITER FOR SINGLE CHECKS ======================
+            # Same logic as bulk files
+            if limits["display_name"] == "FREE":
+                max_rps = 12
+            elif "BASIC" in limits["display_name"]:
+                max_rps = 22
+            else:  # VIP or YEARLY
+                max_rps = 32
+
+            rate_limiter = RateLimiter(max_rps=max_rps)
+            rate_limiter.acquire()   # ← This was missing!
             
             status_msg = await update.message.reply_text(
                 f"🔍 Checking <code>{email}</code>...\nPlease wait...", 
@@ -1701,7 +1713,7 @@ async def handle_message(update: Update, context: CallbackContext):
             response = format_single_result(result, user_plan, mode)
             await status_msg.edit_text(response, parse_mode='HTML')
             
-            # 🔥 AUTO PIN THE RESULT
+            # AUTO PIN THE RESULT
             await manage_result_pin(update, context, status_msg.message_id)
             
             hits_increment = 1 if result['success'] else 0
