@@ -1966,7 +1966,7 @@ async def button_callback(update: Update, context: CallbackContext):
             return
 
         # Update BOTH columns in database
-        update_user_stats(user_id, {"api_mode": new_mode, "mode": new_mode})
+        update_user_stats(user_id, {"api_mode": new_mode})
 
         await query.answer(f"✅ Switched to {new_mode} Mode!", show_alert=False)
         await show_api_mode_menu(query, context)
