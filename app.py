@@ -1140,6 +1140,7 @@ Channel: {CHANNEL_USERNAME}
 • <b>Currency:</b> <code>{result.get('currency', 'N/A')}</code>
 • <b>Payment:</b> <code>{result.get('payment_method', 'Unknown')}</code>
 """
+            
     text = (base + extra + f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Channel: {CHANNEL_USERNAME}
