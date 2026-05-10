@@ -48,6 +48,18 @@ MODES = {
             "Saves detailed results in TXT files"
         ]
     },
+    "Vivamax": {
+        "display": "Vivamax Mode",
+        "icon": "📺",
+        "color": "📺",
+        "features": [
+            "Checks Vivamax PH streaming accounts",
+            "Detects subscription status",
+            "Shows account details",
+            "Philippine streaming service",
+            "Saves detailed results in TXT files"
+        ]
+    },
 }
 
 # ============= DAILY REWARD TIMER HELPER (Fixed - uses UTC) =============
@@ -134,6 +146,18 @@ def get_mode_display(mode_key: str = None) -> str:
     
     mode_info = MODES[mode_key]
     return f"{mode_info['icon']} {mode_info['display']}"
+
+# ============= MODE DISPATCHER =============
+def get_checker_function(api_mode: str, user_id: int = None):
+    """Returns the correct checker function + blocks normal users from Vivamax"""
+    if user_id and user_id != ADMIN_ID and api_mode == "Vivamax":
+        api_mode = "Crunchyroll"   # Force fallback
+    
+    checkers = {
+        "Crunchyroll": check_crunchyroll,
+        "Vivamax": check_vivamax,
+    }
+    return checkers.get(api_mode, check_crunchyroll)
 
 # ============= PLAN CONFIG =============
 PLAN_CONFIG = {
@@ -943,7 +967,7 @@ async def show_api_mode_menu(query, context):
     
     mode_info = MODES.get(current_mode, MODES["Crunchyroll"])
     
-    # Build feature list with green checks
+    # Build feature list
     features_text = "\n".join([f"✅ {feature}" for feature in mode_info["features"]])
     
     text = f"""
@@ -957,7 +981,7 @@ async def show_api_mode_menu(query, context):
 Click on a mode below to switch:
     """.strip()
 
-    # Build 2-column grid
+    # Show ALL modes to everyone (including Vivamax)
     keyboard = []
     row = []
     for mode_key, info in MODES.items():
@@ -1083,6 +1107,36 @@ Try another account!
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Channel: {CHANNEL_USERNAME}
 """).strip()
+
+
+def check_vivamax(email, password, proxy=None):
+    """Vivamax Checker - IMPLEMENT YOUR REAL LOGIC HERE"""
+    # TODO: Replace this placeholder with your actual Vivamax API / login logic
+    result = {
+        'email': email,
+        'password': password,
+        'success': False,
+        'message': 'Vivamax checker - logic not implemented yet',
+        'email_verified': 'Unknown',
+        'account_creation': '',
+        'plan': 'Unknown',
+        'currency': 'PHP',
+        'subscribable': 'False',
+        'free_trial': 'False',
+        'expiry': '',
+        'active': 'False',
+        'country': 'PH',
+        'username': 'Unknown',
+        'plan_sub': 'Unknown',
+        'max_streams': 'Unknown',
+        'payment_method': 'Unknown'
+    }
+    # Example: you can test by uncommenting the line below
+    result['success'] = True
+    result['message'] = 'ACTIVE SUBSCRIPTION!'
+    result['active'] = 'Yes'
+    result['plan'] = 'Premium'
+    return result
 
 def check_crunchyroll(email, password, proxy=None):
     """FINAL VERSION - Stronger Payment Method extraction"""
@@ -1467,7 +1521,10 @@ async def handle_message(update: Update, context: CallbackContext):
                 parse_mode='HTML'
             )
             
-            result = await run_blocking(check_crunchyroll, email, password)
+            # Use correct checker based on user's selected mode
+            mode = stats.get("api_mode", "Crunchyroll")
+            checker = get_checker_function(mode, user_id)
+            result = await run_blocking(checker, email, password)
                         
             # Get current user's plan
             stats = get_user_stats(user_id)
@@ -1617,6 +1674,7 @@ async def handle_document(update: Update, context: CallbackContext):
 
     progress_msg = await update.message.reply_text(
         f"🚀 Starting bulk check with <b>{user_threads}</b> threads...\n"
+        f"Mode: <b>{get_mode_display(stats.get('api_mode'))}</b>\n"
         f"0/{total} completed (0%)", 
         parse_mode='HTML'
     )
@@ -1624,7 +1682,10 @@ async def handle_document(update: Update, context: CallbackContext):
     def check_account(acc):
         email, pwd = acc
         rate_limiter.acquire()
-        result = check_crunchyroll(email, pwd)
+        # Use correct checker based on user's selected mode
+        mode = stats.get("api_mode", "Crunchyroll")
+        checker = get_checker_function(mode, user_id)
+        result = checker(email, pwd)
         time.sleep(0.8 + random.uniform(0.6, 1.2))
         return result
     
@@ -1891,6 +1952,12 @@ async def button_callback(update: Update, context: CallbackContext):
     elif data.startswith("set_mode:"):
         new_mode = data.split(":", 1)[1]
         user_id = query.from_user.id
+        
+        # === ADMIN-ONLY PROTECTION FOR VIVAMAX ===
+        if new_mode == "Vivamax" and user_id != ADMIN_ID:
+            await query.answer("❌ Vivamax mode is Admin Only!", show_alert=True)
+            return
+
         stats = get_user_stats(user_id)
         current_mode = stats.get("api_mode", "Crunchyroll")
 
