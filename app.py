@@ -1107,7 +1107,7 @@ Try another account!
 Channel: {CHANNEL_USERNAME}
         """.strip()
     else:
-        # === ORIGINAL CRUNCHYROLL TIERED FORMAT (unchanged) ===
+        # === ORIGINAL CRUNCHYROLL TIERED FORMAT ===
         base = f"""
 ✅ <b>HIT FOUND!</b>
 
@@ -1121,15 +1121,15 @@ Channel: {CHANNEL_USERNAME}
 • <b>Country:</b> <code>{country_display}</code>
 """
 
-    if user_plan == "FREE":
-        extra = ""
-    elif user_plan == "BASIC":
-        extra = f"""
+        if user_plan == "FREE":
+            extra = ""
+        elif user_plan == "BASIC":
+            extra = f"""
 • <b>User:</b> <code>{result.get('username', 'Unknown')}</code>
 • <b>Verified:</b> <code>{result.get('email_verified', 'No')}</code>
 • <b>Free Trial:</b> <code>{result.get('free_trial', 'False')}</code>
 """
-    else:  # VIP / YEARLY
+        else:  # VIP / YEARLY
             extra = f"""
 • <b>User:</b> <code>{result.get('username', 'Unknown')}</code>
 • <b>Verified:</b> <code>{result.get('email_verified', 'No')}</code>
@@ -1140,14 +1140,13 @@ Channel: {CHANNEL_USERNAME}
 • <b>Currency:</b> <code>{result.get('currency', 'N/A')}</code>
 • <b>Payment:</b> <code>{result.get('payment_method', 'Unknown')}</code>
 """
-            
-    text = (base + extra + f"""
+
+        text = (base + extra + f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Channel: {CHANNEL_USERNAME}
 """).strip()
 
     return text
-
 
 def check_vivamax(email: str, password: str, proxy=None):
     """Real Vivamax Checker - Fully integrated with your bot"""
