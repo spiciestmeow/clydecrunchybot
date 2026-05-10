@@ -1004,38 +1004,56 @@ Click on a mode below to switch:
         reply_markup=reply_markup
     )
 
-def format_hit_for_file(result, user_plan="FREE"):
+def format_hit_for_file(result, user_plan="FREE", mode="Crunchyroll"):
     """Tiered formatting for the downloaded Hits .txt file"""
     country_code = result.get('country', 'ZZ').upper()
     flag = REGION_HINTS.get(country_code, "🌍")
     expiry_display = get_days_remaining(result['expiry']) if result.get('expiry') else 'N/A'
 
-    base = f"✅ HIT FOUND!\n"
-    base += f"📧 Email: {result['email']}\n"
-    base += f"🔑 Password: {result['password']}\n"
-    base += f"📊 Plan: {result['plan']}\n"
-    base += f"📆 Expires: {expiry_display}\n"
-    base += f"🌍 Country: {country_code} {flag}\n"
-
-    if user_plan == "FREE":
+    if mode == "Vivamax":
+        # === VIVAMAX RICH FORMAT (same as your standalone script) ===
+        base = f"✅ HIT FOUND!\n"
+        base += f"📧 Email: {result['email']}\n"
+        base += f"🔑 Password: {result['password']}\n"
+        base += f"👤 Name: {result.get('displayName', result.get('username', 'N/A'))}\n"
+        base += f"📊 Status: {result.get('status', 'UNKNOWN')}\n"
+        base += f"📌 Plan: {result.get('plan', 'Unknown')}\n"
+        base += f"💰 Price: {result.get('price', 'N/A')}\n"
+        base += f"📆 Billing: {result.get('billing', 'N/A')}\n"
+        base += f"📅 Expires: {expiry_display}\n"
+        base += f"⏳ Days Left: {result.get('days_left', 'N/A')}\n"
+        base += f"🔄 Auto Renew: {result.get('auto_renew', '—')}\n"
+        base += f"🔐 PIN: {result.get('pin', 'N/A')}\n"
+        base += f"📱 Mobile: {result.get('mobile', 'N/A')}\n"
+        base += f"🌍 Country: {country_code} {flag}\n"
         return base + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    else:
+        base = f"✅ HIT FOUND!\n"
+        base += f"📧 Email: {result['email']}\n"
+        base += f"🔑 Password: {result['password']}\n"
+        base += f"📊 Plan: {result['plan']}\n"
+        base += f"📆 Expires: {expiry_display}\n"
+        base += f"🌍 Country: {country_code} {flag}\n"
 
-    elif user_plan == "BASIC":
-        extra = f"• User: {result.get('username', 'Unknown')}\n"
-        extra += f"• Verified: {result['email_verified']}\n"
-        extra += f"• Free Trial: {result['free_trial']}\n"
-        return base + extra + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        if user_plan == "FREE":
+            return base + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
-    else:  # VIP / YEARLY - Full details
-        extra = f"• User: {result.get('username', 'Unknown')}\n"
-        extra += f"• Verified: {result['email_verified']}\n"
-        extra += f"• Created: {result['account_creation'] or 'N/A'}\n"
-        extra += f"• Free Trial: {result['free_trial']}\n"
-        extra += f"• Plan(SUB): {result.get('plan_sub', 'Unknown')}\n"
-        extra += f"• Max Streams: {result.get('max_streams', 'Unknown')}\n"
-        extra += f"• Currency: {result['currency'] or 'N/A'}\n"
-        extra += f"• Payment: {result.get('payment_method', 'Unknown')}\n"
-        return base + extra + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        elif user_plan == "BASIC":
+            extra = f"• User: {result.get('username', 'Unknown')}\n"
+            extra += f"• Verified: {result['email_verified']}\n"
+            extra += f"• Free Trial: {result['free_trial']}\n"
+            return base + extra + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        else:  # VIP / YEARLY - Full details
+            extra = f"• User: {result.get('username', 'Unknown')}\n"
+            extra += f"• Verified: {result['email_verified']}\n"
+            extra += f"• Created: {result['account_creation'] or 'N/A'}\n"
+            extra += f"• Free Trial: {result['free_trial']}\n"
+            extra += f"• Plan(SUB): {result.get('plan_sub', 'Unknown')}\n"
+            extra += f"• Max Streams: {result.get('max_streams', 'Unknown')}\n"
+            extra += f"• Currency: {result['currency'] or 'N/A'}\n"
+            extra += f"• Payment: {result.get('payment_method', 'Unknown')}\n"
+            return base + extra + "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
 def format_single_result(result, user_plan="FREE"):
     """Tiered hit result based on user's plan"""
@@ -1882,11 +1900,12 @@ async def handle_document(update: Update, context: CallbackContext):
         # Get user's plan for tiered formatting
         current_stats = get_user_stats(user_id)
         user_plan = current_stats.get("plan", "FREE").upper()
+        mode = stats.get("api_mode", "Crunchyroll")
 
-        hits_text = f"🎉 CRUNCHYROLL HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
+        hits_text = f"🎉 {mode.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
         
         for hit in hits:
-            hits_text += format_hit_for_file(hit, user_plan)
+            hits_text += format_hit_for_file(hit, user_plan, mode)
 
         hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
         with open(hits_file, "w", encoding="utf-8") as f:
