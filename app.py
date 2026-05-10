@@ -18,8 +18,11 @@ from contextlib import asynccontextmanager
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackQueryHandler
 from supabase import create_client, Client
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from regions import REGION_HINTS
+
+# ============= TIMEZONE CONFIG =============
+PH_TZ = timezone(timedelta(hours=8))
 
 # ============= CONFIGURATION =============
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -416,7 +419,7 @@ def get_user_stats(user_id: int):
         "total_hits": 0,
         "total_free": 0,
         "total_combo_files": 0,
-        "today_date": str(date.today()),
+        "today_date": str(datetime.now(PH_TZ).date()),
         "today_scans": 0,
         "today_files": 0,
         "referrals": 0,
@@ -440,12 +443,15 @@ def update_user_stats(user_id: int, data: dict):
     supabase.table("user_stats").update(data).eq("user_id", user_id).execute()
 
 def reset_daily_if_needed(stats: dict, user_id: int):
-    """Automatically reset daily scans AND daily files if it's a new day"""
-    if stats.get("today_date") != str(date.today()):
+    """Automatically reset daily scans AND daily files at 00:00 Philippine Time"""
+    today_ph = datetime.now(PH_TZ).date()
+    today_str = str(today_ph)
+    
+    if stats.get("today_date") != today_str:
         update_user_stats(user_id, {
             "today_scans": 0,
             "today_files": 0,
-            "today_date": str(date.today())
+            "today_date": today_str
         })
         return True
     return False
@@ -685,9 +691,10 @@ async def show_statistics_menu(query, context):
     stats = get_user_stats(user_id)
     stats = clean_expired_daily_reward(stats)
 
-    # Auto reset daily stats if new day
-    if stats["today_date"] != str(date.today()):
-        update_user_stats(user_id, {"today_scans": 0, "today_date": str(date.today())})
+    # Auto reset daily stats if new day (Manila time)
+    today_ph = datetime.now(PH_TZ).date()
+    if stats["today_date"] != str(today_ph):
+        update_user_stats(user_id, {"today_scans": 0, "today_date": str(today_ph)})
         stats = get_user_stats(user_id)
     
     limits = get_plan_limits(stats)
