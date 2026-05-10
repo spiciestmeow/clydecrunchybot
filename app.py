@@ -1151,7 +1151,7 @@ Channel: {CHANNEL_USERNAME}
 def check_vivamax(email: str, password: str, proxy=None):
     """Real Vivamax Checker - Fully integrated with your bot"""
     result = {
-        'email': email,
+        'email': email, 
         'password': password,
         'success': False,
         'message': '',
@@ -1579,7 +1579,7 @@ async def start(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     welcome = f"""
-<b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗥𝗨𝗡𝗖𝗛𝗬𝗥𝗢𝗟𝗟 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
+<b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📤 <b>Send your combo list (.txt file)</b>
 <i>Format: mail:pass (one per line)</i>
@@ -2014,7 +2014,7 @@ async def edit_to_main_menu(update_or_query, context):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     welcome = f"""
-<b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗥𝗨𝗡𝗖𝗛𝗬𝗥𝗢𝗟𝗟 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
+<b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📤 <b>Send your combo list (.txt file)</b>
 <i>Format: mail:pass (one per line)</i>
