@@ -353,6 +353,9 @@ def get_plan_limits(stats: dict):
 # ============= SUPABASE CLIENT =============
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# ← ADD THIS RIGHT AFTER
+print(f"✅ Supabase URL: {SUPABASE_URL}")
+print(f"✅ Supabase Key starts with: {SUPABASE_KEY[:20] if SUPABASE_KEY else 'MISSING'}")
 # ============= OWNER RESTRICTION =============
 def is_owner(update: Update):
     return update.effective_user and update.effective_user.id == ADMIN_ID
