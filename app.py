@@ -1949,8 +1949,8 @@ async def handle_document(update: Update, context: CallbackContext):
             if result and result.get('success'):
                 hits.append(result)
             
-            # Update progress every 5 accounts or at the end
-            if completed % 5 == 0 or completed == total:
+            # Update progress every 10 accounts (or at the end) → fixes "Query too old" error
+            if completed % 15 == 0 or completed == total:
                 elapsed_sec = int(time.time() - start_time)
                 cpm = int((completed / elapsed_sec) * 60) if elapsed_sec > 0 else 0
                 percent = int((completed / total) * 100)
@@ -1978,7 +1978,7 @@ async def handle_document(update: Update, context: CallbackContext):
                         f"📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>\n"
                         f"━━━━━━━━━━━━━━━━━━━━━━━\n"
                         f"✅ <b>Hits:</b> <code>{len(hits)}</code>\n"
-                        f"❌ Bad: <b>{bad_so_far}</b>\n"
+                        f"❌ Bad: <code>{bad_so_far}</code>\n"
                         f"━━━━━━━━━━━━━━━━━━━━━━━\n"
                         f"⏱ <b>Elapsed:</b> <code>{elapsed_sec//60:02d}m {elapsed_sec%60:02d}s</code>\n"
                         f"⚡ <b>CPM:</b> <code>{cpm}</code>\n"
