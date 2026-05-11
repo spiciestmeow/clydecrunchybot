@@ -1354,7 +1354,6 @@ def check_crunchyroll(email, password, proxy=None):
 
             headers = {
                 "User-Agent": "AppleCoreMedia/1.0.0.20L563 (Apple TV; U; CPU OS 16_5 like Mac OS X; en_us)",
-                "Content-Type": "application/x-www-form-urlencoded",
                 "Host": "beta-api.crunchyroll.com"
             }
 
@@ -1366,6 +1365,9 @@ def check_crunchyroll(email, password, proxy=None):
                 proxies=proxies,
                 timeout=20
             )
+
+            # ADD THIS LINE temporarily
+            print(f"[DEBUG] Status: {resp.status_code} | Body: {resp.text[:300]}")
 
             if resp.status_code == 200:
                 access_token = resp.json().get('access_token')
