@@ -1847,11 +1847,15 @@ async def handle_document(update: Update, context: CallbackContext):
                 parse_mode='HTML'
             )
             return
+        
+    stats = get_user_stats(user_id)
+    limits = get_plan_limits(stats)
+    user_threads = limits["current_threads"]
 
     # ====================== NEW PROGRESS FORMAT (your requested design) ======================
     cancel_event = Event()
     pause_event = Event()
-    pause_event.set()                    # Start unpaused
+    pause_event.set()
 
     scan_id = str(uuid.uuid4())[:8]
     context.user_data['current_scan'] = {
@@ -1859,7 +1863,7 @@ async def handle_document(update: Update, context: CallbackContext):
         'cancel_event': cancel_event,
         'pause_event': pause_event,
         'progress_msg': None,
-        'stop_requested': False          # new flag for "Stop and send results"
+        'stop_requested': False
     }
 
     # 3 buttons in ONE clean row
@@ -1900,10 +1904,6 @@ async def handle_document(update: Update, context: CallbackContext):
     # ====================== Start scanning ======================
     hits = []
     start_time = time.time()
-
-    stats = get_user_stats(user_id)
-    limits = get_plan_limits(stats)
-    user_threads = limits["current_threads"]
 
     if limits["display_name"] == "FREE":
         max_rps = 12
