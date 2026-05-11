@@ -2020,10 +2020,10 @@ async def handle_document(update: Update, context: CallbackContext):
 
         if bad_count > 0:
             hit_emails = {hit['email'] for hit in hits}
-            bad_lines = [f"{email}:{pwd}" for email, pwd in accounts if email not in hit_emails]
+            bad_lines = [f"{email}:{pwd} | checkBy @caydigitals" for email, pwd in accounts if email not in hit_emails]
             
-            bad_text = f"❌ BAD ACCOUNTS | @Caydigitals\n"
-            bad_text += f"{'='*40}\n\n"
+            bad_text = f"❌ BAD ACCOUNTS | Crunchyroll\n"
+            bad_text += f"{'='*40}\n"
             bad_text += "\n".join(bad_lines)
             
             bad_file = f"/tmp/crunchy_bad_{timestamp}.txt"
