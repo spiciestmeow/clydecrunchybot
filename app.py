@@ -1935,15 +1935,20 @@ async def handle_document(update: Update, context: CallbackContext):
         return result
 
     completed = 0
+
+    loop = asyncio.get_running_loop()
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=user_threads) as executor:
-        future_to_acc = {executor.submit(check_account, acc): acc for acc in accounts}
+        futures = [
+            loop.run_in_executor(executor, check_account, acc)
+            for acc in accounts
+        ]
         
-        for future in concurrent.futures.as_completed(future_to_acc):
+        for coro in asyncio.as_completed(futures):
             if cancel_event.is_set():
                 break
 
-            result = future.result()
+            result = await coro  # ← await lets other callbacks run between results
             completed += 1
             
             if result and result.get('success'):
