@@ -1334,8 +1334,8 @@ def check_crunchyroll(email, password, proxy=None):
     max_retries = 4
 
     # === CURRENT WORKING ANDROID CLIENT (2026) ===
-    CLIENT_ID = "dmryfescdbotubenz5z"
-    CLIENT_SECRET = "5N9i8OWg2VkMrmhzC_5CWzDK8nyIz4AM"
+    CLIENT_ID = "y2arvjb0h0rgvtizlovy"
+    CLIENT_SECRET = "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2"
     basic_auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
 
     for attempt in range(max_retries):
