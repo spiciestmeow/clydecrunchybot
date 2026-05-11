@@ -122,6 +122,12 @@ def get_remaining_reward_time(stats: dict) -> str:
     except:
         return "🟢 <b>Ready to Claim!</b>"
 
+def format_files_display(today_files, max_files, plan):
+    """Show '-' for FREE users, actual count for others"""
+    if plan and plan.upper() == "FREE":
+        return "-"
+    return f"{today_files}/{max_files}"
+
 def generate_referral_code(user_id: int) -> str:
     """Auto-generate nice referral code like CAY73994"""
     prefix = "CAY"
@@ -731,6 +737,7 @@ async def show_statistics_menu(query, context):
     max_files = limits.get("multi_scan_max_files", 1)
     today_files_used = stats.get("today_files", 0)
     total_files = stats.get("total_combo_files", 0)
+    files_display = format_files_display(today_files_used, max_files, stats.get("plan", "FREE"))
 
     text = f"""
 📊 <b>Your Statistics</b>
@@ -742,7 +749,7 @@ async def show_statistics_menu(query, context):
 📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 🧵 <b>Threads:</b> <code>{limits['current_threads']}/{limits['max_threads']}</code>
-📁 <b>Files Today:</b> <code>{today_files_used}/{max_files}</code>
+📁 <b>Files Today:</b> <code>{files_display}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📈 <b>General Statistics:</b>
 ✅ Total Scans: <code>{stats['total_scans']}</code>
@@ -1563,6 +1570,8 @@ async def start(update: Update, context: CallbackContext):
     # File statistics for dashboard
     max_files = limits.get("multi_scan_max_files", 1)
     today_files = stats.get("today_files", 0)
+
+    files_display = format_files_display(today_files, max_files, stats.get("plan", "FREE"))
     
     keyboard = [
         [
@@ -1589,7 +1598,7 @@ async def start(update: Update, context: CallbackContext):
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
-📁 Files Today: <code><b>{today_files}/{max_files}</b></code>
+📁 Files Today: <code><b>{files_display}</b></code>
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
@@ -2061,6 +2070,8 @@ async def edit_to_main_menu(update_or_query, context):
     max_files = limits.get("multi_scan_max_files", 1)
     today_files = stats.get("today_files", 0)
 
+    files_display = format_files_display(today_files, max_files, stats.get("plan", "FREE"))
+
     keyboard = [
         [
             InlineKeyboardButton("📊 My Stats", callback_data="menu_stats"),
@@ -2086,7 +2097,7 @@ async def edit_to_main_menu(update_or_query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
-📁 Files Today: <code><b>{today_files}/{max_files}</b></code>
+📁 Files Today: <code><b>{files_display}</b></code>
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
