@@ -2019,16 +2019,17 @@ async def handle_document(update: Update, context: CallbackContext):
             )
 
         if bad_count > 0:
-            bad_text = "EMAIL:PASSWORD | STATUS\n" + "="*40 + "\n"
             hit_emails = {hit['email'] for hit in hits}
-            for email, pwd in accounts:
-                status = "HIT" if email in hit_emails else "BAD"
-                bad_text += f"{email}:{pwd} | {status}\n"
+            bad_lines = [f"{email}:{pwd}" for email, pwd in accounts if email not in hit_emails]
+            
+            bad_text = f"❌ BAD ACCOUNTS | @Caydigitals\n"
+            bad_text += f"{'='*40}\n\n"
+            bad_text += "\n".join(bad_lines)
             
             bad_file = f"/tmp/crunchy_bad_{timestamp}.txt"
             with open(bad_file, "w", encoding="utf-8") as f:
                 f.write(bad_text)
-            
+
             bad_caption = f"""
 ❌ <b>{bad_count}x Bad Accounts</b>
 ────────────────────────────
