@@ -608,7 +608,6 @@ async def show_rewards_menu(query, context):
         claim_button_text = "🎁 Claim Daily Reward"
 
     text = f"""
-<<<<<<< Updated upstream
 🎁 <b>Rewards & Gifts Hub</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Claim your daily free lines or redeem premium gift codes provided by the admin.
@@ -733,36 +732,6 @@ Telegram Stars only (currently accepted)
 
 💳 To Purchase A Membership
 Contact: <a href="https://t.me/caydigitals">@caydigitals</a>
-=======
-📊 <b>Your Statistics</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 <b>User ID:</b> <code>{stats['user_id']}</code>
-📅 <b>Registered:</b> {stats['registered']}
-👑 <b>Plan:</b> {stats['plan']}
-📆 <b>Expires:</b> {stats['expires']}
-📡 <b>Mode:</b> {stats['mode']}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🧵 <b>Threads:</b> <b>{current_threads} / {MAX_THREADS}</b>
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 <b>General Statistics:</b>
-✅ <b>Total Scans:</b> {stats['total_scans']}
-💎 <b>Total Hits:</b> {stats['total_hits']}
-🆓 <b>Total FREE:</b> {stats['total_free']}
-🎯 <b>Success Rate:</b> {success_rate}%
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 <b>Today's Statistics:</b>
-📊 <b>Scans Used:</b> {stats['today_scans']}
-⏳ <b>Remaining:</b> ♾️ / ♾️
-👥 <b>Referrals:</b> {stats['referrals']}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎁 <b>Rewards & Limits Details:</b>
-🎟️ <b>Claimed Codes:</b> 0
-🎁 <b>Daily Reward Claimed Today:</b> {'Yes' if stats['daily_reward_claimed'] else 'No'}
-✨ <b>Daily Reward Lines (Active):</b> {stats['daily_reward_lines']}
-👥 <b>Referral Bonus Lines:</b> +{stats['referral_bonus_lines']}
-📦 <b>Base Plan Limit:</b> {stats['base_plan_limit']}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
->>>>>>> Stashed changes
     """.strip()
 
     keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
