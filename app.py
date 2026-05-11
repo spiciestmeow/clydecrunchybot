@@ -1848,7 +1848,7 @@ async def handle_document(update: Update, context: CallbackContext):
             )
             return
 
-    # ====================== PAUSE / CANCEL CONTROL ======================
+    # ====================== NEW PROGRESS FORMAT (your requested design) ======================
     cancel_event = Event()
     pause_event = Event()
     pause_event.set()                    # Start unpaused
@@ -1858,25 +1858,40 @@ async def handle_document(update: Update, context: CallbackContext):
         'scan_id': scan_id,
         'cancel_event': cancel_event,
         'pause_event': pause_event,
-        'progress_msg': None
+        'progress_msg': None,
+        'stop_requested': False          # new flag for "Stop and send results"
     }
 
-    # Control buttons
+    # 3 buttons in ONE clean row
     keyboard = [
         [
             InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
-            InlineKeyboardButton("⏹️ Cancel", callback_data=f"cancel_scan:{scan_id}")
+            InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
+            InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Start message with buttons
+    # === YOUR EXACT REQUESTED PROGRESS MESSAGE ===
     progress_msg = await update.message.reply_text(
-        f"🚀 **Bulk Check Started**\n"
-        f"📁 <code>{document.file_name}</code>\n"
-        f"🔢 <b>0/{total}</b> accounts\n"
-        f"🧵 Threads: <b>{limits['current_threads']}</b>\n"
-        f"📡 Mode: <b>{get_mode_display(stats.get('api_mode'))}</b>",
+        f"📊 <b>Scan In Progress</b> 🔄\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📁 File: <code>{document.file_name}</code>\n"
+        f"🔢 <b>Processed:</b> <b>0/{total}</b> (<b>0%</b>)\n"
+        f"🧵 <b>Threads:</b> <b>{user_threads}</b>\n"
+        f"📡 <b>Mode:</b> <b>{get_mode_display(stats.get('api_mode'))}</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ <b>Hits:</b> <b>0</b>\n"
+        f"❌ Bad: <b>0</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏱ <b>Elapsed:</b> <b>00m 00s</b>\n"
+        f"⚡ <b>CPM:</b> <b>0</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"— Controls:\n"
+        f"Pause\n"
+        f"Resume\n"
+        f"Stop and send results\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━",
         parse_mode='HTML',
         reply_markup=reply_markup
     )
@@ -1936,22 +1951,51 @@ async def handle_document(update: Update, context: CallbackContext):
             
             # Update progress every 5 accounts or at the end
             if completed % 5 == 0 or completed == total:
+                elapsed_sec = int(time.time() - start_time)
+                cpm = int((completed / elapsed_sec) * 60) if elapsed_sec > 0 else 0
+                percent = int((completed / total) * 100)
+                bad_so_far = completed - len(hits)
+
+                status_title = "⏸️ <b>PAUSED</b> 🔄" if not pause_event.is_set() else "📊 <b>Scan In Progress</b> 🔄"
+
+                # Rebuild keyboard every update (keeps 3 buttons alive)
+                keyboard = [
+                    [
+                        InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
+                        InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
+                        InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
+                    ]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+
                 try:
-                    percent = int((completed / total) * 100)
-                    status = "⏸️ **PAUSED**" if not pause_event.is_set() else "🚀 Checking"
                     await progress_msg.edit_text(
-                        f"{status}\n"
-                        f"📁 <code>{document.file_name}</code>\n"
-                        f"🔢 <b>{completed}/{total}</b> ({percent}%)\n"
-                        f"✅ Hits so far: <b>{len(hits)}</b>",
+                        f"{status_title}\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📁 File: <code>{document.file_name}</code>\n"
+                        f"🔢 <b>Processed:</b> <b>{completed}/{total}</b> (<b>{percent}%</b>)\n"
+                        f"🧵 <b>Threads:</b> <b>{user_threads}</b>\n"
+                        f"📡 <b>Mode:</b> <b>{get_mode_display(stats.get('api_mode'))}</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"✅ <b>Hits:</b> <b>{len(hits)}</b>\n"
+                        f"❌ Bad: <b>{bad_so_far}</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"⏱ <b>Elapsed:</b> <b>{elapsed_sec//60:02d}m {elapsed_sec%60:02d}s</b>\n"
+                        f"⚡ <b>CPM:</b> <b>{cpm}</b>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"— Controls:\n"
+                        f"Pause\n"
+                        f"Resume\n"
+                        f"Stop and send results\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━",
                         parse_mode='HTML',
                         reply_markup=reply_markup
                     )
                 except:
-                    pass  # message might be deleted or too fast
+                    pass  # Telegram rate limit or message deleted
 
     # ====================== CLEANUP & FINISH ======================
-    if cancel_event.is_set():
+    if cancel_event.is_set() and not context.user_data.get('current_scan', {}).get('stop_requested', False):
         await progress_msg.edit_text("⏹️ **Scan Cancelled** by user.", parse_mode='HTML')
     else:
         # Your original finish logic
@@ -2020,7 +2064,7 @@ async def handle_document(update: Update, context: CallbackContext):
 
         if bad_count > 0:
             hit_emails = {hit['email'] for hit in hits}
-            bad_lines = [f"{email}:{pwd} | checkBy @caydigitals" for email, pwd in accounts if email not in hit_emails]
+            bad_lines = [f"{email}:{pwd} | Check_By = @caydigitals" for email, pwd in accounts if email not in hit_emails]
             
             bad_text = f"❌ BAD ACCOUNTS | Crunchyroll\n"
             bad_text += f"{'='*40}\n"
@@ -2199,21 +2243,25 @@ async def button_callback(update: Update, context: CallbackContext):
         scan_id = data.split(":", 1)[1]
         current = context.user_data.get('current_scan')
         if current and current.get('scan_id') == scan_id:
-            pause_event = current['pause_event']
-            if pause_event.is_set():
-                pause_event.clear()
-                await query.answer("⏸️ Scan Paused", show_alert=True)
-            else:
-                pause_event.set()
-                await query.answer("▶️ Scan Resumed", show_alert=True)
+            current['pause_event'].clear()
+            await query.answer("⏸️ Scan Paused", show_alert=True)
+        return
+    
+    elif data.startswith("resume_scan:"):
+        scan_id = data.split(":", 1)[1]
+        current = context.user_data.get('current_scan')
+        if current and current.get('scan_id') == scan_id:
+            current['pause_event'].set()
+            await query.answer("▶️ Scan Resumed", show_alert=True)
         return
 
-    elif data.startswith("cancel_scan:"):
+    elif data.startswith("stop_scan:"):
         scan_id = data.split(":", 1)[1]
         current = context.user_data.get('current_scan')
         if current and current.get('scan_id') == scan_id:
             current['cancel_event'].set()
-            await query.answer("⏹️ Cancelling scan...", show_alert=True)
+            current['stop_requested'] = True
+            await query.answer("⏹️ Stopping scan and preparing results...", show_alert=True)
         return
 
     elif data.startswith("set_mode:"):
