@@ -64,6 +64,26 @@ MODES = {
     },
 }
 
+# ============= SCAN CONTROL VIA SUPABASE =============
+def set_scan_status(scan_id: str, status: str):
+    supabase.table("active_scans").upsert({
+        "scan_id": scan_id,
+        "status": status
+    }).execute()
+
+def get_scan_status(scan_id: str) -> str:
+    """Returns 'running', 'paused', or 'stopped'"""
+    try:
+        r = supabase.table("active_scans").select("status").eq("scan_id", scan_id).execute()
+        if r.data:
+            return r.data[0]["status"]
+    except:
+        pass
+    return "stopped"
+
+def delete_scan(scan_id: str):
+    supabase.table("active_scans").delete().eq("scan_id", scan_id).execute()
+
 # ============= DAILY REWARD TIMER HELPER (Fixed - uses UTC) =============
 def is_daily_reward_active(stats: dict) -> bool:
     """Returns True if the 24-hour reward timer is still active"""
@@ -1853,15 +1873,10 @@ async def handle_document(update: Update, context: CallbackContext):
     user_threads = limits["current_threads"]
 
     # ====================== NEW PROGRESS FORMAT (your requested design) ======================
-    cancel_event = Event()
-    pause_event = Event()
-    pause_event.set()
 
     scan_id = str(uuid.uuid4())[:8]
     context.user_data['current_scan'] = {
         'scan_id': scan_id,
-        'cancel_event': cancel_event,
-        'pause_event': pause_event,
         'progress_msg': None,
         'stop_requested': False
     }
@@ -1914,15 +1929,19 @@ async def handle_document(update: Update, context: CallbackContext):
     rate_limiter = RateLimiter(max_rps=max_rps)
 
     def check_account(acc):
-        """Worker that respects pause & cancel"""
-        if cancel_event.is_set():
+        """Worker that polls Supabase for pause/cancel"""
+        status = get_scan_status(scan_id)
+        if status == "stopped":
             return None
 
-        # Wait while paused
-        while not pause_event.is_set():
-            time.sleep(0.3)
-            if cancel_event.is_set():
+        # Wait while paused (polls every 0.5s)
+        while True:
+            status = get_scan_status(scan_id)
+            if status == "running":
+                break
+            if status == "stopped":
                 return None
+            time.sleep(0.5)
 
         email, pwd = acc
         rate_limiter.acquire()
@@ -1937,7 +1956,14 @@ async def handle_document(update: Update, context: CallbackContext):
     completed = 0
 
     loop = asyncio.get_running_loop()
-    
+
+    set_scan_status(scan_id, "running")
+    context.user_data['current_scan'] = {
+        'scan_id': scan_id,
+        'progress_msg': None,
+        'stop_requested': False
+    }
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=user_threads) as executor:
         futures = [
             loop.run_in_executor(executor, check_account, acc)
@@ -1945,7 +1971,7 @@ async def handle_document(update: Update, context: CallbackContext):
         ]
         
         for coro in asyncio.as_completed(futures):
-            if cancel_event.is_set():
+            if get_scan_status(scan_id) == "stopped":
                 break
 
             result = await coro  # ← await lets other callbacks run between results
@@ -1961,7 +1987,8 @@ async def handle_document(update: Update, context: CallbackContext):
                 percent = int((completed / total) * 100)
                 bad_so_far = completed - len(hits)
 
-                status_title = "⏸️ <b>PAUSED</b> 🔄" if not pause_event.is_set() else "📊 <b>Scan In Progress</b> 🔄"
+                current_status = get_scan_status(scan_id)
+                status_title = "⏸️ <b>PAUSED</b> 🔄" if current_status == "paused" else "📊 <b>Scan In Progress</b> 🔄"
 
                 # Rebuild keyboard every update (keeps 3 buttons alive)
                 keyboard = [
@@ -2000,8 +2027,14 @@ async def handle_document(update: Update, context: CallbackContext):
                     pass  # Telegram rate limit or message deleted
 
     # ====================== CLEANUP & FINISH ======================
-    if cancel_event.is_set() and not context.user_data.get('current_scan', {}).get('stop_requested', False):
-        await progress_msg.edit_text("⏹️ **Scan Cancelled** by user.", parse_mode='HTML')
+    final_status = get_scan_status(scan_id)
+    if final_status == "stopped" and completed < total:
+        # Stopped early — still send partial results if any hits
+        hits_count = len(hits)
+        await progress_msg.edit_text(
+            f"⏹️ <b>Scan Stopped</b>\n\nProcessed: {completed}/{total}\n✅ Hits: {hits_count}",
+            parse_mode='HTML'
+        )
     else:
         # Your original finish logic
         hits_count = len(hits)
@@ -2095,6 +2128,7 @@ async def handle_document(update: Update, context: CallbackContext):
             )
 
     # Cleanup
+    delete_scan(scan_id)
     if 'current_scan' in context.user_data:
         del context.user_data['current_scan']
 
@@ -2246,27 +2280,20 @@ async def button_callback(update: Update, context: CallbackContext):
 
     elif data.startswith("pause_scan:"):
         scan_id = data.split(":", 1)[1]
-        current = context.user_data.get('current_scan')
-        if current and current.get('scan_id') == scan_id:
-            current['pause_event'].clear()
-            await query.answer("⏸️ Scan Paused", show_alert=True)
+        set_scan_status(scan_id, "paused")
+        await query.answer("⏸️ Scan Paused", show_alert=True)
         return
-    
+
     elif data.startswith("resume_scan:"):
         scan_id = data.split(":", 1)[1]
-        current = context.user_data.get('current_scan')
-        if current and current.get('scan_id') == scan_id:
-            current['pause_event'].set()
-            await query.answer("▶️ Scan Resumed", show_alert=True)
+        set_scan_status(scan_id, "running")
+        await query.answer("▶️ Scan Resumed", show_alert=True)
         return
 
     elif data.startswith("stop_scan:"):
         scan_id = data.split(":", 1)[1]
-        current = context.user_data.get('current_scan')
-        if current and current.get('scan_id') == scan_id:
-            current['cancel_event'].set()
-            current['stop_requested'] = True
-            await query.answer("⏹️ Stopping scan and preparing results...", show_alert=True)
+        set_scan_status(scan_id, "stopped")
+        await query.answer("⏹️ Stopping scan...", show_alert=True)
         return
 
     elif data.startswith("set_mode:"):
