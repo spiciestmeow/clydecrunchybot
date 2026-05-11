@@ -1330,7 +1330,10 @@ def check_crunchyroll(email, password, proxy=None):
     }
 
     proxies = {'http': proxy, 'https': proxy} if proxy else None
-    max_retries = 4
+    max_retries = 3
+
+    CLIENT_ID = "y2arvjb0h0rgvtizlovy"
+    CLIENT_SECRET = "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2"
 
     for attempt in range(max_retries):
         try:
@@ -1339,13 +1342,12 @@ def check_crunchyroll(email, password, proxy=None):
 
             # ====================== LOGIN ======================
             token_url = "https://beta-api.crunchyroll.com/auth/v1/token"
+
             token_data = {
                 "grant_type": "password",
                 "username": email,
                 "password": password,
                 "scope": "offline_access",
-                "client_id": "y2arvjb0h0rgvtizlovy",
-                "client_secret": "JVLvwdIpXvxU-qIBvT1M8oQTr1qlQJX2",
                 "device_type": "SamsungTV",
                 "device_id": device_id,
                 "device_name": "Goku"
@@ -1360,7 +1362,14 @@ def check_crunchyroll(email, password, proxy=None):
                 "accept-encoding": "gzip"
             }
 
-            resp = requests.post(token_url, data=token_data, headers=headers, proxies=proxies, timeout=25)
+            resp = requests.post(
+                token_url,
+                data=token_data, 
+                headers=headers, 
+                auth=(CLIENT_ID, CLIENT_SECRET),
+                proxies=proxies, 
+                timeout=20
+            )
 
             if resp.status_code == 200:
                 access_token = resp.json().get('access_token')
@@ -1532,7 +1541,7 @@ def check_crunchyroll(email, password, proxy=None):
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt + random.uniform(0.5, 2))
                 continue
-            result['message'] = f'Error: {str(e)[:80]}'
+            result['message'] = f'Error: {str(e)[:100]}'
             return result
 
     return result
