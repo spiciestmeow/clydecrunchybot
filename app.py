@@ -1569,17 +1569,15 @@ def check_crunchyroll(email, password, proxy=None):
     return result
 
 async def start(update: Update, context: CallbackContext):
-    # ============= LOADING MESSAGE (for Render cold starts) =============
     loading_msg = await update.message.reply_text(
-        "🔄 <b>Redirecting to Checker Bot</b>",
+        "🔄 <i>Redirecting to Checker Bot</i>",
         parse_mode='HTML'
     )
 
-    # Animate dots while heavy stuff loads (DB calls, etc.)
-    dots = ["🔄 <b>Redirecting to Checker Bot</b>",
-            "🔄 <b>Redirecting to Checker Bot</b>.",
-            "🔄 <b>Redirecting to Checker Bot</b>..",
-            "🔄 <b>Redirecting to Checker Bot</b>..."]
+    dots = ["🔄 <i>Redirecting to Checker Bot</i>",
+            "🔄 <i>Redirecting to Checker Bot</i>.",
+            "🔄 <i>Redirecting to Checker Bot</i>..",
+            "🔄 <i>Redirecting to Checker Bot</i>..."]
 
     async def animate():
         for dot in dots:
@@ -1590,7 +1588,6 @@ async def start(update: Update, context: CallbackContext):
                 pass
 
     await animate()
-    # =====================================================================
 
     if not await check_subscription(update, context):
         await loading_msg.delete()
@@ -1598,8 +1595,6 @@ async def start(update: Update, context: CallbackContext):
         return
 
     user_id = update.effective_user.id
-
-    # Save username/first_name on first use
     username = update.effective_user.username
     first_name = update.effective_user.first_name
 
@@ -1654,6 +1649,11 @@ async def start(update: Update, context: CallbackContext):
 <b>👇 Select an option from the menu below:</b>
 """
     context.user_data['in_main_menu'] = True
+
+    try:
+        await loading_msg.delete()
+    except:
+        pass
 
     await update.message.reply_text(
         welcome,
