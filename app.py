@@ -433,7 +433,7 @@ async def lifespan(app: FastAPI):
     else:
         print("⚠️ WEBHOOK_URL env var is missing!")
 
-    print("🚀 Bot started on Vercel")
+    print("🚀 Bot started on Render")
     yield
 
     await tg_app.stop()
@@ -1569,7 +1569,31 @@ def check_crunchyroll(email, password, proxy=None):
     return result
 
 async def start(update: Update, context: CallbackContext):
+    # ============= LOADING MESSAGE (for Render cold starts) =============
+    loading_msg = await update.message.reply_text(
+        "🔄 <b>Redirecting to Checker Bot</b>",
+        parse_mode='HTML'
+    )
+
+    # Animate dots while heavy stuff loads (DB calls, etc.)
+    dots = ["🔄 <b>Redirecting to Checker Bot</b>",
+            "🔄 <b>Redirecting to Checker Bot</b>.",
+            "🔄 <b>Redirecting to Checker Bot</b>..",
+            "🔄 <b>Redirecting to Checker Bot</b>..."]
+
+    async def animate():
+        for dot in dots:
+            try:
+                await loading_msg.edit_text(dot, parse_mode='HTML')
+                await asyncio.sleep(0.4)
+            except:
+                pass
+
+    await animate()
+    # =====================================================================
+
     if not await check_subscription(update, context):
+        await loading_msg.delete()
         await send_join_channel_message(update, context)
         return
 
@@ -2355,7 +2379,15 @@ async def webhook(request: Request):
         print(f"❌ Webhook error: {e}")
         # Still return 200 so Telegram stops retrying
         return {"status": "error"}
-    
+
+@app.get("/")
+async def root():
+    return {
+        "status": "✅ Bot is Running",
+        "bot": "Cay's Checker Bot",
+        "webhook": "/webhook"
+    }
+
 # Optional: Health check
 @app.get("/webhook")
 async def webhook_get():
