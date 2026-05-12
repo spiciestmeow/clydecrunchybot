@@ -1569,28 +1569,7 @@ def check_crunchyroll(email, password, proxy=None):
     return result
 
 async def start(update: Update, context: CallbackContext):
-    loading_msg = await update.message.reply_text(
-        "🔄 <i>Redirecting to Checker Bot</i>",
-        parse_mode='HTML'
-    )
-
-    dots = ["🔄 <i>Redirecting to Checker Bot</i>",
-            "🔄 <i>Redirecting to Checker Bot</i>.",
-            "🔄 <i>Redirecting to Checker Bot</i>..",
-            "🔄 <i>Redirecting to Checker Bot</i>..."]
-
-    async def animate():
-        for dot in dots:
-            try:
-                await loading_msg.edit_text(dot, parse_mode='HTML')
-                await asyncio.sleep(0.4)
-            except:
-                pass
-
-    await animate()
-
     if not await check_subscription(update, context):
-        await loading_msg.delete()
         await send_join_channel_message(update, context)
         return
 
@@ -1649,11 +1628,6 @@ async def start(update: Update, context: CallbackContext):
 <b>👇 Select an option from the menu below:</b>
 """
     context.user_data['in_main_menu'] = True
-
-    try:
-        await loading_msg.delete()
-    except:
-        pass
 
     await update.message.reply_text(
         welcome,
