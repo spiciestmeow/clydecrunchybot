@@ -1168,10 +1168,10 @@ SteamID: <code>{result.get('steamid','N/A')}</code>
 SteamID: <code>{result.get('steamid','N/A')}</code>
 """
 
-        # === IMPROVED GAMES SECTION ===
+        # Games section with Family View note
         if result.get('games_count') is not None:
             if result['games_count'] == 0:
-                text += "\n🎮 <b>Games Owned:</b> <code>0</code> <i>(Family View / Private Profile)</i>"
+                text += "\n🎮 <b>Games Owned:</b> <code>0</code> <i>(Family View / Private)</i>"
             else:
                 text += f"\n🎮 <b>Games Owned:</b> <code>{result['games_count']}</code>"
             
@@ -1298,7 +1298,7 @@ def steam_rsa_encrypt(password: str, modulus_hex: str, exponent_hex: str) -> str
     return base64.b64encode(hex_bytes).decode('ascii')
 
 def check_steam(username: str, password: str, proxy=None) -> dict:
-    """Improved Steam Checker - Rich data + Owned Games + better 2FA handling"""
+    """Improved Steam Checker - Rich data + Family View bypass + better 2FA handling"""
     result = {
         'email': username,
         'password': password,
@@ -1311,9 +1311,10 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         'country': 'Unknown',
         'vac_banned': False,
         'limited': False,
-        'games_count': None,
+        # Game fields
+        'games_count': 0,
         'total_playtime': 0,
-        'games': []
+        'games': []               # top games for display
     }
 
     try:
@@ -1396,7 +1397,7 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             result['steamid'] = auth_resp.steamid
             result['message'] = f"Valid | SteamID: {auth_resp.steamid}"
 
-            # ====================== EXTRA RICH DATA (Profile + Games) ======================
+            # ====================== EXTRA RICH DATA (Profile + Games with Family View bypass) ======================
             if result.get('steamid'):
                 try:
                     # 1. Player Summary
@@ -1410,31 +1411,52 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
                         result['vac_banned'] = bool(data.get("vacban", False))
                         result['limited'] = data.get("personastate", 0) == 0 and data.get("communityvisibilitystate", 0) == 1
 
-                    # 2. Owned Games (NEW FEATURE)
+                    # 2. Owned Games - Official API first
+                    games_count = 0
+                    total_playtime = 0
+                    top_games = []
+
+                    # Try official API
                     if STEAM_API_KEY and STEAM_API_KEY != "YOUR_STEAM_API_KEY_HERE":
-                        games_url = (
-                            f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/"
-                            f"?key={STEAM_API_KEY}&steamid={result['steamid']}&format=json&include_appinfo=1"
-                        )
+                        games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key={STEAM_API_KEY}&steamid={result['steamid']}&format=json&include_appinfo=1"
                         games_resp = requests.get(games_url, timeout=15)
                         if games_resp.status_code == 200:
                             games_data = games_resp.json().get("response", {})
-                            result['games_count'] = games_data.get("game_count", 0)
-                            
-                            games_list = games_data.get("games", [])[:50]  # top 50 only
-                            result['total_playtime'] = sum(g.get("playtime_forever", 0) for g in games_list) // 60  # hours
+                            games_count = games_data.get("game_count", 0)
+                            games_list = games_data.get("games", [])
 
-                            # Store top games for single-check display
-                            result['games'] = [
-                                {
-                                    "name": g.get("name", "Unknown Game"),
-                                    "playtime_hours": g.get("playtime_forever", 0) // 60
-                                }
-                                for g in sorted(games_list, key=lambda x: x.get("playtime_forever", 0), reverse=True)[:12]
-                            ]
+                    # Fallback: Steam Community endpoint (bypasses Family View)
+                    if games_count == 0:
+                        community_url = f"https://steamcommunity.com/actions/GetOwnedGames?steamid={result['steamid']}&format=json&include_appinfo=1"
+                        community_resp = requests.get(community_url, timeout=15, headers={
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                        })
+                        if community_resp.status_code == 200:
+                            try:
+                                comm_data = community_resp.json().get("response", {})
+                                games_count = comm_data.get("game_count", 0)
+                                games_list = comm_data.get("games", [])
+                            except:
+                                pass
+
+                    # Process games
+                    if games_list:
+                        result['games_count'] = games_count
+                        result['total_playtime'] = sum(g.get("playtime_forever", 0) for g in games_list) // 60
+
+                        # Top 12 games sorted by playtime
+                        sorted_games = sorted(games_list, key=lambda x: x.get("playtime_forever", 0), reverse=True)[:12]
+                        result['games'] = [
+                            {
+                                "name": g.get("name", "Unknown Game"),
+                                "playtime_hours": g.get("playtime_forever", 0) // 60
+                            }
+                            for g in sorted_games
+                        ]
+
                 except Exception as e:
-                    print(f"[Steam] Extra data error: {e}")  # won't break the checker
-                    result['games_count'] = None
+                    print(f"[Steam] Extra data error: {e}")
+                    result['games_count'] = 0
 
     except Exception as e:
         result['message'] = f"Error: {str(e)[:80]}"
