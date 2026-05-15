@@ -1168,15 +1168,19 @@ SteamID: <code>{result.get('steamid','N/A')}</code>
 SteamID: <code>{result.get('steamid','N/A')}</code>
 """
 
-        # Games section
+        # === IMPROVED GAMES SECTION ===
         if result.get('games_count') is not None:
-            text += f"\n🎮 <b>Games Owned:</b> <code>{result['games_count']}</code>"
+            if result['games_count'] == 0:
+                text += "\n🎮 <b>Games Owned:</b> <code>0</code> <i>(Family View / Private Profile)</i>"
+            else:
+                text += f"\n🎮 <b>Games Owned:</b> <code>{result['games_count']}</code>"
+            
             if result.get('total_playtime', 0) > 0:
                 text += f"\n⏳ <b>Total Playtime:</b> <code>{result['total_playtime']:,} hours</code>"
             
             if result.get('games'):
                 text += "\n🔥 <b>Top Games:</b>"
-                for game in result['games'][:8]:   # show max 8
+                for game in result['games'][:8]:
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
 
         text += f"\n🌍 <b>Country:</b> {result.get('country', 'Unknown')}"
