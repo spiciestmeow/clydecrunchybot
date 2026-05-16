@@ -1035,20 +1035,25 @@ async def show_api_mode_menu(query, context):
 Click on a mode below to switch:
     """.strip()
 
-    # Show ALL modes to everyone (including Vivamax)
+    # ====================== CUSTOM KEYBOARD LAYOUT ======================
     keyboard = []
-    row = []
-    for mode_key, info in MODES.items():
+    
+    # First row: Crunchyroll + Vivamax
+    row1 = []
+    for mode_key in ["Crunchyroll", "Vivamax"]:
+        info = MODES[mode_key]
         button_text = f"{info['color']} {info['display']}" if mode_key == current_mode else f"{info['icon']} {info['display']}"
-        row.append(InlineKeyboardButton(button_text, callback_data=f"set_mode:{mode_key}"))
-        if len(row) == 2:
-            keyboard.append(row)
-            row = []
-    if row:
-        keyboard.append(row)
+        row1.append(InlineKeyboardButton(button_text, callback_data=f"set_mode:{mode_key}"))
+    keyboard.append(row1)
 
-    # Back button
-    keyboard.append([InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")])
+    # Second row: Steam + Back to Settings (side by side as requested)
+    steam_info = MODES["Steam"]
+    steam_text = f"{steam_info['color']} {steam_info['display']}" if current_mode == "Steam" else f"{steam_info['icon']} {steam_info['display']}"
+    
+    keyboard.append([
+        InlineKeyboardButton(steam_text, callback_data="set_mode:Steam"),
+        InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")
+    ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
 
