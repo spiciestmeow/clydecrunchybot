@@ -85,15 +85,14 @@ MODES = {
     },
 }
 
-# ============= PROXYLESS BANNER (Reusable & Easy to Edit) =============
+# ============= PROXYLESS BANNER (Reusable & Clean) =============
 def get_proxyless_banner() -> str:
-    """Reusable proxyless banner - change it in ONE place only"""
+    """Reusable proxyless banner - no extra blank line"""
     return """🚀 <b>PROXYLESS MODE</b> ✅
 • No proxy list required
 • Ultra fast & stable checks
 • Works instantly on all plans
-━━━━━━━━━━━━━━━━━━━━━━━━
-"""
+━━━━━━━━━━━━━━━━━━━━━━━━"""
 
 # ============= SCAN CONTROL VIA SUPABASE =============
 def set_scan_status(scan_id: str, status: str):
