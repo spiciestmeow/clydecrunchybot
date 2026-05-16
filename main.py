@@ -345,7 +345,7 @@ def get_days_remaining(expires_str: str) -> str:
         
         delta = (expires_date - today).days
         
-        if delta < 0:
+        if delta <b 0:
             return "❌ Expired"
         elif delta == 0:
             return "Expires today"
@@ -724,16 +724,50 @@ async def claim_daily_reward(query, context):
         "daily_reward_last_claimed": datetime.utcnow().isoformat()
     })
     
-    # Special jackpot message
+# ====================== ADMIN NOTIFICATION ======================
+    try:
+        now_ph = datetime.now(PH_TZ)
+        time_str = now_ph.strftime("%Y-%m-%d %I:%M %p")
+        
+        username_display = f"@{stats.get('username')}" if stats.get('username') else "No username"
+        
+        admin_msg = f"""
+🎁 <b>Daily Reward Claimed!</b>
+━━━━━━━━━━━━━━━━━━━━━━━━
+🆔 <b>User ID:</b> <code>{user_id}</code>
+👤 <b>Username:</b> {username_display}
+🎟️ <b>Reward:</b> +{reward_amount} combos
+⏰ <b>Time:</b> {time_str} (PH time)
+        """.strip()
+
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=admin_msg,
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        print(f"⚠️ Failed to send daily reward notification: {e}")
+
+    # ====================== USER FEEDBACK (Popup) ======================
     if reward_amount >= 100:
-        await query.answer(f"🎉🎉🎉 MASSIVE JACKPOT!!! +{reward_amount} combos (Valid for 24H)!", show_alert=True)
-    elif reward_amount >= 50:
-        await query.answer(f"🔥 Great reward! +{reward_amount} combos (Valid for 24H)", show_alert=True)
-    else:
         await query.answer(
-            f"🎁 You received +{reward_amount} combos (Valid for 24H).",
+            f"🎉🎉🎉 MASSIVE JACKPOT!!!\n"
+            f"You received +{reward_amount} combos!",
             show_alert=True
         )
+    elif reward_amount >= 50:
+        await query.answer(
+            f"🔥 Excellent!\n"
+            f"You received +{reward_amount} combos!",
+            show_alert=True
+        )
+    else:
+        await query.answer(
+            f"🎁 Reward Claimed!\n"
+            f"You received +{reward_amount} combos (Valid for 24H)",
+            show_alert=True
+        )
+
     await show_rewards_menu(query, context)
 
 # ============= MEMBERSHIP PLAN MENU (Updated to match PLAN_CONFIG) =============
@@ -743,7 +777,7 @@ async def show_membership_menu(query, context):
     stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
     
-    current_plan_text = f"📌 Your Current Plan: <b>{get_plan_with_emoji(stats.get('plan'))}</b>"
+    current_plan_text = f"📌 <b>Your Current Plan:</b> <code>{get_plan_with_emoji(stats.get('plan'))}</code>"
     
     text = f"""
 👑 <b>MEMBERSHIP PLANS</b>
@@ -788,8 +822,8 @@ async def show_membership_menu(query, context):
 ⚡ <b>Payment Method</b>
 Telegram Stars only (currently accepted)
 
-💳 To Purchase A Membership
-Contact: <a href="https://t.me/caydigitals">@caydigitals</a>
+💳 <b>To Purchase A Membership</b>
+<b>Contact:</b> <a href="https://t.me/caydigitals">@caydigitals</a>
     """.strip()
 
     keyboard = [[InlineKeyboardButton("↼ Back", callback_data="back_to_main")]]
