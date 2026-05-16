@@ -2506,17 +2506,84 @@ async def handle_document(update: Update, context: CallbackContext):
             if scan_status == "stopped":
                 break
 
-            # When paused, hold the main loop too (stops progress updates)
-            pause_start_main = time.time()
-            while scan_status == "paused":
-                await asyncio.sleep(0.5)
-                scan_status = get_scan_status(scan_id)
-                if scan_status == "stopped":
-                    break
-                # Auto-stop after 10 minutes of being paused
-                if time.time() - pause_start_main > 600:
-                    set_scan_status(scan_id, "stopped")
-                    break
+            # When paused, immediately update header + hold the main loop
+            if scan_status == "paused":
+                # ← Immediately update the message to show PAUSED header
+                elapsed_sec = int(time.time() - start_time)
+                cpm = int((completed / elapsed_sec) * 60) if elapsed_sec > 0 else 0
+                percent = int((completed / total) * 100)
+                bad_so_far = completed - len(hits)
+                keyboard = [
+                    [
+                        InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
+                        InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
+                        InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
+                    ]
+                ]
+                try:
+                    await progress_msg.edit_text(
+                        f"⏸️ <b>PAUSED</b> — Auto-stops in 10 min if not resumed\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"📁 File: <code>{document.file_name}</code>\n"
+                        f"🔢 <b>Processed:</b> <code>{completed}/{total}</code> (<code>{percent}%</code>)\n"
+                        f"🧵 <b>Threads:</b> <code>{user_threads}</code>\n"
+                        f"📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"✅ <b>Hits:</b> <code>{len(hits)}</code>\n"
+                        f"❌ Bad: <code>{bad_so_far}</code>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"⏱ <b>Elapsed:</b> <code>{elapsed_sec//60:02d}m {elapsed_sec%60:02d}s</code>\n"
+                        f"⚡ <b>CPM:</b> <code>{cpm}</code>\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"— Controls:\n"
+                        f"Pause\n"
+                        f"Resume\n"
+                        f"Stop and send results\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━",
+                        parse_mode='HTML',
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
+                except:
+                    pass
+
+                # Now hold the loop while still paused
+                pause_start_main = time.time()
+                while scan_status == "paused":
+                    await asyncio.sleep(0.5)
+                    scan_status = get_scan_status(scan_id)
+                    if scan_status == "stopped":
+                        break
+                    if time.time() - pause_start_main > 600:
+                        set_scan_status(scan_id, "stopped")
+                        break
+
+                # ← Immediately update back to "In Progress" when resumed
+                if scan_status == "running":
+                    try:
+                        await progress_msg.edit_text(
+                            f"📊 <b>Scan In Progress</b> 🔄\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📁 File: <code>{document.file_name}</code>\n"
+                            f"🔢 <b>Processed:</b> <code>{completed}/{total}</code> (<code>{percent}%</code>)\n"
+                            f"🧵 <b>Threads:</b> <code>{user_threads}</code>\n"
+                            f"📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"✅ <b>Hits:</b> <code>{len(hits)}</code>\n"
+                            f"❌ Bad: <code>{bad_so_far}</code>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"⏱ <b>Elapsed:</b> <code>{elapsed_sec//60:02d}m {elapsed_sec%60:02d}s</code>\n"
+                            f"⚡ <b>CPM:</b> <code>{cpm}</code>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"— Controls:\n"
+                            f"Pause\n"
+                            f"Resume\n"
+                            f"Stop and send results\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━",
+                            parse_mode='HTML',
+                            reply_markup=InlineKeyboardMarkup(keyboard)
+                        )
+                    except:
+                        pass
 
             if scan_status == "stopped":
                 break
