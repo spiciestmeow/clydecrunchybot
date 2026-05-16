@@ -668,7 +668,7 @@ Claim your daily free combos or redeem premium gift codes provided by the admin.
     )
 
 async def claim_daily_reward(query, context):
-    """Personal 24-hour reward timer — VERY HARD LOTTERY (0.5% jackpot)"""
+    """Personal 24-hour reward timer — Balanced & Exciting Lottery"""
     user_id = query.from_user.id
     stats = get_user_stats(user_id)
     
@@ -681,14 +681,26 @@ async def claim_daily_reward(query, context):
 
     # === VERY HARD LOTTERY (0.5% jackpot) ===
     if plan == "FREE":
-        # 94.5% tiny | 5% small | 0.5% jackpot
-        rewards = [random.randint(2, 6)] * 189 + [random.randint(8, 15)] * 10 + [random.randint(25, 45)] * 1
+        # 89% tiny | 10% decent | 1% jackpot
+        rewards = (
+            [random.randint(3, 8)] * 178 +
+            [random.randint(10, 20)] * 20 +
+            [random.randint(30, 60)] * 2
+        )
     elif plan == "BASIC":
-        # 79.5% small | 20% decent | 0.5% big
-        rewards = [random.randint(12, 30)] * 159 + [random.randint(35, 70)] * 40 + [random.randint(90, 160)] * 1
+        # 75% small | 23% good | 2% big
+        rewards = (
+            [random.randint(15, 35)] * 150 +
+            [random.randint(40, 85)] * 46 +
+            [random.randint(110, 200)] * 4
+        )
     else:  # VIP or YEARLY
-        # 69.5% decent | 30% good | 0.5% massive jackpot
-        rewards = [random.randint(50, 110)] * 139 + [random.randint(130, 220)] * 60 + [random.randint(300, 600)] * 1
+        # 65% decent | 32% strong | 3% massive
+        rewards = (
+            [random.randint(60, 130)] * 130 +
+            [random.randint(150, 280)] * 64 +
+            [random.randint(350, 750)] * 6
+        )
 
     reward_amount = random.choice(rewards)
 
@@ -699,14 +711,15 @@ async def claim_daily_reward(query, context):
     })
     
     # Special jackpot message
-    if reward_amount >= 90:
-        await query.answer(f"🎉🎉🎉 JACKPOT!!! +{reward_amount} combos (Valid for 24H)!", show_alert=True)
+    if reward_amount >= 100:
+        await query.answer(f"🎉🎉🎉 MASSIVE JACKPOT!!! +{reward_amount} combos (Valid for 24H)!", show_alert=True)
+    elif reward_amount >= 50:
+        await query.answer(f"🔥 Great reward! +{reward_amount} combos (Valid for 24H)", show_alert=True)
     else:
         await query.answer(
-            f"🎉 You received +{reward_amount} combos (Valid for 24H).",
+            f"🎁 You received +{reward_amount} combos (Valid for 24H).",
             show_alert=True
         )
-    
     await show_rewards_menu(query, context)
 
 # ============= MEMBERSHIP PLAN MENU (Updated to match PLAN_CONFIG) =============
@@ -1038,6 +1051,7 @@ async def show_api_mode_menu(query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━
 {get_proxyless_banner()}
 <b>Current Mode:</b> <code>{mode_info["color"]} {mode_info["display"]}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━
 {mode_info["icon"]} <b>{mode_info["display"]}</b>
 {features_text}
 ━━━━━━━━━━━━━━━━━━━━━━━━
