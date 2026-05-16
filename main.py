@@ -2440,9 +2440,17 @@ async def handle_document(update: Update, context: CallbackContext):
         email, pwd = acc
         rate_limiter.acquire()
 
+        # ← Check AGAIN right before the actual request
+        if get_scan_status(scan_id) == "stopped":
+            return None
+
         mode = stats.get("api_mode", "Crunchyroll")
         checker = get_checker_function(mode, user_id)
         result = checker(email, pwd)
+
+        # ← Check AGAIN after the request finishes
+        if get_scan_status(scan_id) == "stopped":
+            return None
 
         time.sleep(0.8 + random.uniform(0.6, 1.2))
         return result
@@ -2475,7 +2483,7 @@ async def handle_document(update: Update, context: CallbackContext):
                 hits.append(result)
             
             # Update progress every 10 accounts (or at the end) → fixes "Query too old" error
-            if completed % 15 == 0 or completed == total:
+            if completed % 5 == 0 or completed == total:
                 elapsed_sec = int(time.time() - start_time)
                 cpm = int((completed / elapsed_sec) * 60) if elapsed_sec > 0 else 0
                 percent = int((completed / total) * 100)
