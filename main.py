@@ -2183,7 +2183,10 @@ async def handle_message(update: Update, context: CallbackContext):
             )
             try:
                 stop_event = asyncio.Event()
-                
+
+                # Use correct checker based on user's selected mode
+                mode = stats.get("api_mode", "Crunchyroll")
+
                 # Run progress animation + checker at the same time
                 progress_task = asyncio.create_task(
                     animate_progress(status_msg, email, stop_event)
@@ -2207,11 +2210,6 @@ async def handle_message(update: Update, context: CallbackContext):
                 )
                 await asyncio.sleep(0.5)
 
-                # Use correct checker based on user's selected mode
-                mode = stats.get("api_mode", "Crunchyroll")
-                checker = get_checker_function(mode, user_id)
-                result = await run_blocking(checker, email, password)
-                            
                 # Get current user's plan + mode
                 stats = get_user_stats(user_id)
                 user_plan = stats.get("plan", "FREE").upper()
@@ -2219,6 +2217,7 @@ async def handle_message(update: Update, context: CallbackContext):
 
                 response = format_single_result(result, user_plan, mode)
                 await status_msg.edit_text(response, parse_mode='HTML')
+
             except Exception as e:
                 await status_msg.edit_text(
                     f"❌ <b>Check Failed</b>\n\n"
