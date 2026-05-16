@@ -94,6 +94,38 @@ def get_proxyless_banner() -> str:
 • Works instantly on all plans
 ━━━━━━━━━━━━━━━━━━━━━━━━"""
 
+async def animate_progress(status_msg, email, stop_event):
+    """Runs in background while check is happening"""
+    stages = [
+        (10, "🔍 Connecting to server..."),
+        (25, "🔐 Authenticating..."),
+        (45, "📡 Fetching account info..."),
+        (65, "📊 Checking subscription..."),
+        (80, "📦 Extracting details..."),
+        (95, "⏳ Finalizing..."),
+    ]
+    
+    for percent, label in stages:
+        if stop_event.is_set():
+            return
+        
+        # Build progress bar
+        filled = int(percent / 10)  # out of 10 blocks
+        bar = "█" * filled + "░" * (10 - filled)
+        
+        try:
+            await status_msg.edit_text(
+                f"🔍 <b>Checking:</b> <code>{email}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"[{bar}] <code>{percent}%</code>\n"
+                f"📌 {label}",
+                parse_mode='HTML'
+            )
+        except:
+            pass
+        
+        await asyncio.sleep(1.2)  # adjust speed here
+
 # ============= SCAN CONTROL VIA SUPABASE =============
 def set_scan_status(scan_id: str, status: str):
     supabase.table("active_scans").upsert({
@@ -2143,22 +2175,60 @@ async def handle_message(update: Update, context: CallbackContext):
             rate_limiter.acquire()   # ← This was missing!
             
             status_msg = await update.message.reply_text(
-                f"🔍 Checking <code>{email}</code>...\nPlease wait...", 
+                f"🔍 <b>Checking:</b> <code>{email}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"[░░░░░░░░░░] <code>0%</code>\n"
+                f"📌 Starting...",
                 parse_mode='HTML'
             )
-            
-            # Use correct checker based on user's selected mode
-            mode = stats.get("api_mode", "Crunchyroll")
-            checker = get_checker_function(mode, user_id)
-            result = await run_blocking(checker, email, password)
-                        
-            # Get current user's plan + mode
-            stats = get_user_stats(user_id)
-            user_plan = stats.get("plan", "FREE").upper()
-            mode = stats.get("api_mode", "Crunchyroll")
+            try:
+                stop_event = asyncio.Event()
+                
+                # Run progress animation + checker at the same time
+                progress_task = asyncio.create_task(
+                    animate_progress(status_msg, email, stop_event)
+                )
+                
+                checker = get_checker_function(mode, user_id)
+                result = await run_blocking(checker, email, password)
+                
+                # Stop the animation
+                stop_event.set()
+                progress_task.cancel()
+                
+                # Show 100% briefly before result
+                bar_full = "█" * 10
+                await status_msg.edit_text(
+                    f"🔍 <b>Checking:</b> <code>{email}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"[{bar_full}] <code>100%</code>\n"
+                    f"✅ Done!",
+                    parse_mode='HTML'
+                )
+                await asyncio.sleep(0.5)
 
-            response = format_single_result(result, user_plan, mode)
-            await status_msg.edit_text(response, parse_mode='HTML')
+                # Use correct checker based on user's selected mode
+                mode = stats.get("api_mode", "Crunchyroll")
+                checker = get_checker_function(mode, user_id)
+                result = await run_blocking(checker, email, password)
+                            
+                # Get current user's plan + mode
+                stats = get_user_stats(user_id)
+                user_plan = stats.get("plan", "FREE").upper()
+                mode = stats.get("api_mode", "Crunchyroll")
+
+                response = format_single_result(result, user_plan, mode)
+                await status_msg.edit_text(response, parse_mode='HTML')
+            except Exception as e:
+                await status_msg.edit_text(
+                    f"❌ <b>Check Failed</b>\n\n"
+                    f"📧 <b>Account:</b> <code>{email}</code>\n"
+                    f"⚠️ <b>Error:</b> <code>{str(e)[:100]}</code>\n\n"
+                    f"Please try again.",
+                    parse_mode='HTML'
+                )
+                print(f"[ERROR] format_single_result crashed: {e}")
+                return
             
             # AUTO PIN THE RESULT
             await manage_result_pin(update, context, status_msg.message_id)
