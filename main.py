@@ -345,7 +345,7 @@ def get_days_remaining(expires_str: str) -> str:
         
         delta = (expires_date - today).days
         
-        if delta <b 0:
+        if delta < 0:
             return "❌ Expired"
         elif delta == 0:
             return "Expires today"
