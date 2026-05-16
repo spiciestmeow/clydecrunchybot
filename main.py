@@ -1269,8 +1269,7 @@ Channel: {CHANNEL_USERNAME}
                 text += "\n🔥 <b>Top Games:</b>"
                 for game in result['games'][:10]:
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
-        text += f"""
-
+        text += f"""\n
 🌍 <b>Country:</b> {result.get('country', 'Unknown')}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━
