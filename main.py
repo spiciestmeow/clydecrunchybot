@@ -644,9 +644,9 @@ async def show_rewards_menu(query, context):
 Claim your daily free combos or redeem premium gift codes provided by the admin.
 
 📊 <b>Possible Rewards:</b>
-• <b>FREE:</b> mostly 2-6 combos (very rare up to <tg-spoiler>45</tg-spoiler>)
-• <b>BASIC:</b> mostly 12-70 combos (very rare up to <tg-spoiler>160</tg-spoiler>)
-• <b>VIP / YEARLY:</b> mostly 50-220 combos (very rare up to <tg-spoiler>600</tg-spoiler>)
+• <b>FREE:</b> mostly 3-8 combos (very rare up to <tg-spoiler>60</tg-spoiler>)
+• <b>BASIC:</b> mostly 15-35 combos (very rare up to <tg-spoiler>200</tg-spoiler>)
+• <b>VIP / YEARLY:</b> mostly 60-130 combos (very rare up to <tg-spoiler>750</tg-spoiler>)
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Daily Statistics:</b>
 ⏰ Next Reward In: <code>{get_remaining_reward_time(stats)}</code>
