@@ -573,20 +573,20 @@ async def show_referrals_menu(query, context):
 📊 <b>Your Statistics:</b>
 ✅ Referral Count: <b>{referral_count}</b>
 📈 Your Daily Limit: <b>{limits['remaining_text']}</b>
-💰 Total Bonus: <b>+{total_bonus} lines</b>
+💰 Total Bonus: <b>+{total_bonus} combos</b>
 ━━━━━━━━━━━━━━━━━━━━━━━
-🎁 <b>Earn +{bonus_per} lines for each referral!</b>
+🎁 <b>Earn +{bonus_per} combos for each referral!</b>
 ━━━━━━━━━━━━━━━━━━━━━━━
 🔗 <b>Your Referral Link:</b>
 {referral_link}
 ━━━━━━━━━━━━━━━━━━━━━━━
 <i>📤 Share this link with your friends!</i>
-Your daily limit increases by {bonus_per} lines for each person who registers using your link.
+Your daily limit increases by {bonus_per} combos for each person who registers using your link.
 
 💡 <b>Example:</b>
-• 0 referrals = {limits['base_limit_text']} lines/day
-• 5 referrals = +{5*bonus_per} lines/day
-• 10 referrals = +{10*bonus_per} lines/day
+• 0 referrals = {limits['base_limit_text']} combos/day
+• 5 referrals = +{5*bonus_per} combos/day
+• 10 referrals = +{10*bonus_per} combos/day
 ━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
@@ -641,12 +641,12 @@ async def show_rewards_menu(query, context):
     text = f"""
 🎁 <b>Rewards & Gifts Hub</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
-Claim your daily free lines or redeem premium gift codes provided by the admin.
+Claim your daily free combos or redeem premium gift codes provided by the admin.
 
 📊 <b>Possible Rewards:</b>
-• <b>FREE:</b> mostly 2-6 lines (very rare up to <tg-spoiler>45</tg-spoiler>)
-• <b>BASIC:</b> mostly 12-70 lines (very rare up to <tg-spoiler>160</tg-spoiler>)
-• <b>VIP / YEARLY:</b> mostly 50-220 lines (very rare up to <tg-spoiler>600</tg-spoiler>)
+• <b>FREE:</b> mostly 2-6 combos (very rare up to <tg-spoiler>45</tg-spoiler>)
+• <b>BASIC:</b> mostly 12-70 combos (very rare up to <tg-spoiler>160</tg-spoiler>)
+• <b>VIP / YEARLY:</b> mostly 50-220 combos (very rare up to <tg-spoiler>600</tg-spoiler>)
 ━━━━━━━━━━━━━━━━━━━━━━━━
 📊 <b>Your Daily Statistics:</b>
 ⏰ Next Reward In: <code>{get_remaining_reward_time(stats)}</code>
@@ -700,10 +700,10 @@ async def claim_daily_reward(query, context):
     
     # Special jackpot message
     if reward_amount >= 90:
-        await query.answer(f"🎉🎉🎉 JACKPOT!!! +{reward_amount} lines (Valid for 24H)!", show_alert=True)
+        await query.answer(f"🎉🎉🎉 JACKPOT!!! +{reward_amount} combos (Valid for 24H)!", show_alert=True)
     else:
         await query.answer(
-            f"🎉 You received +{reward_amount} lines (Valid for 24H).",
+            f"🎉 You received +{reward_amount} combos (Valid for 24H).",
             show_alert=True
         )
     
@@ -820,8 +820,8 @@ async def show_statistics_menu(query, context):
 🎁 <b>Rewards & Limits Details:</b>
 🎟️ Claimed Codes: <code>0</code>
 🎁 Daily Reward Claimed Today: <code>{'Yes' if stats['daily_reward_claimed'] else 'No'}</code>
-✨ Daily Reward Lines (Active): <code>{stats['daily_reward_lines']}</code> {get_remaining_reward_time(stats) if is_daily_reward_active(stats) else ''}
-👥 Referral Bonus Lines: <code>+{stats['referral_bonus_lines']}</code>
+✨ Daily Reward Combos (Active): <code>{stats['daily_reward_lines']}</code> {get_remaining_reward_time(stats) if is_daily_reward_active(stats) else ''}
+👥 Referral Bonus Combos: <code>+{stats['referral_bonus_lines']}</code>
 📦 Base Plan Limit: <code>{limits['base_limit_text']}</code>
     """.strip()
 
@@ -2165,7 +2165,7 @@ async def handle_document(update: Update, context: CallbackContext):
                 f"❌ <b>Not enough scans left today!</b>\n\n"
                 f"• You have <b>{remaining}</b> scans remaining\n"
                 f"• This file contains <b>{total}</b> accounts\n\n"
-                f"Please send a smaller file (maximum <b>{remaining}</b> lines) or wait until tomorrow.",
+                f"Please send a smaller file (maximum <b>{remaining}</b> combos) or wait until tomorrow.",
                 parse_mode='HTML'
             )
             return
@@ -2523,7 +2523,7 @@ async def edit_to_main_menu(update_or_query, context):
 📁 Files Today: <code><b>{files_display}</b></code>
 👑 Plan: <code><b>{limits['display_name']}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
-📈 Daily Limit: <code><b>{limits['remaining_text']} lines</b></code>
+📈 Daily Limit: <code><b>{limits['remaining_text']} combos</b></code>
 📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
