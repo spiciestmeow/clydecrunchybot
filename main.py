@@ -1576,13 +1576,15 @@ def check_steam(username: str, password: str, proxy=None, _retry=0) -> dict:
                 summary_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={STEAM_API_KEY}&steamids={result['steamid']}"
                 summary_resp = requests.get(summary_url, timeout=15)
                 if summary_resp.status_code == 200:
-                    data = summary_resp.json().get("response", {}).get("players", [{}])[0]
-                    result['profile_name'] = data.get("personaname", "Unknown")
-                    result['profile_url'] = data.get("profileurl", "")
-                    country = data.get("loccountrycode", "").strip()
-                    result['country'] = country if country else "Unknown"
-                    visibility = data.get("communityvisibilitystate", 1)
-                    result['profile_visibility'] = {1: "Private", 2: "Friends Only", 3: "Public"}.get(visibility, "Unknown")
+                    players = summary_resp.json().get("response", {}).get("players", [])
+                    if players:
+                        data = players[0]
+                        result['profile_name'] = data.get("personaname", "Unknown")
+                        result['profile_url'] = data.get("profileurl", "")
+                        country = data.get("loccountrycode", "").strip()
+                        result['country'] = country if country else "Unknown"
+                        visibility = data.get("communityvisibilitystate", 1)
+                        result['profile_visibility'] = {1: "Private", 2: "Friends Only", 3: "Public"}.get(visibility, "Unknown")
 
                 # Owned Games
                 games_count = 0
@@ -2235,16 +2237,16 @@ async def handle_message(update: Update, context: CallbackContext):
             # AUTO PIN THE RESULT
             await manage_result_pin(update, context, status_msg.message_id)
             
-            hits_increment = 1 if result['success'] else 0
-            bad_increment = 1 if not result['success'] else 0
+            hits_increment = 1 if result.get('success') else 0
+            bad_increment = 1 if not result.get('success') else 0
             twofa_increment = 1 if result.get('twofa') else 0
 
             update_user_stats(user_id, {
-                "total_scans": stats["total_scans"] + 1,
-                "total_hits": stats["total_hits"] + hits_increment,
+                "total_scans": stats.get("total_scans", 0) + 1,
+                "total_hits": stats.get("total_hits", 0) + hits_increment,
                 "total_free": stats.get("total_free", 0) + bad_increment,
                 "total_2fa": stats.get("total_2fa", 0) + twofa_increment,
-                "today_scans": stats["today_scans"] + 1
+                "today_scans": stats.get("today_scans", 0) + 1
             })
             return
         else:
@@ -2520,43 +2522,42 @@ async def handle_document(update: Update, context: CallbackContext):
 
     # ====================== CLEANUP & FINISH ======================
     final_status = get_scan_status(scan_id)
+    hits_count = len(hits)
+    bad_count = completed - hits_count
+    current_stats = get_user_stats(user_id)
+    twofa_count_bulk = len([h for h in hits if h.get('twofa')])
+
     if final_status == "stopped" and completed < total:
-        # Stopped early — still send partial results if any hits
-        hits_count = len(hits)
         await progress_msg.edit_text(
-            f"⏹️ <b>Scan Stopped</b>\n\nProcessed: {completed}/{total}\n✅ Hits: {hits_count}",
+            f"⏹️ <b>Scan Stopped</b>\n\nProcessed: {completed}/{total}\n✅ Hits: {hits_count}\n❌ Bad: {bad_count}",
             parse_mode='HTML'
         )
     else:
-        # Your original finish logic
-        hits_count = len(hits)
-        bad_count = total - hits_count
-        current_stats = get_user_stats(user_id)
-        twofa_count_bulk = len([h for h in hits if h.get('twofa')])
+        pass
 
-        update_user_stats(user_id, {
-            "total_scans": current_stats["total_scans"] + total,
-            "total_hits": current_stats["total_hits"] + hits_count,
-            "total_free": current_stats.get("total_free", 0) + bad_count,
-            "total_2fa": current_stats.get("total_2fa", 0) + twofa_count_bulk,
-            "today_scans": current_stats["today_scans"] + total
-        })
+    update_user_stats(user_id, {
+        "total_scans": current_stats["total_scans"] + completed,
+        "total_hits": current_stats["total_hits"] + hits_count,
+        "total_free": current_stats.get("total_free", 0) + bad_count,
+        "total_2fa": current_stats.get("total_2fa", 0) + twofa_count_bulk,
+        "today_scans": current_stats["today_scans"] + completed
+    })
 
-        # ====================== IMPROVED SUMMARY WITH 2FA BREAKDOWN ======================
-        elapsed = int(time.time() - start_time)
-        cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
+    # ====================== IMPROVED SUMMARY WITH 2FA BREAKDOWN ======================
+    elapsed = int(time.time() - start_time)
+    cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
 
-        mode_name = stats.get("api_mode", "Crunchyroll")
+    mode_name = stats.get("api_mode", "Crunchyroll")
+    
+    if mode_name == "Steam":
+        twofa_count = len([hit for hit in hits if hit.get('twofa')])
+        normal_hits = hits_count - twofa_count
         
-        if mode_name == "Steam":
-            twofa_count = len([hit for hit in hits if hit.get('twofa')])
-            normal_hits = hits_count - twofa_count
-            
-            hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code> (<code>{normal_hits} Normal + {twofa_count} 2FA</code>)"
-            twofa_line = f"🔐 <b>2FA Required:</b> <code>{twofa_count}</code>\n" if twofa_count > 0 else ""
-        else:
-            hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code>"
-            twofa_line = ""
+        hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code> (<code>{normal_hits} Normal + {twofa_count} 2FA</code>)"
+        twofa_line = f"🔐 <b>2FA Required:</b> <code>{twofa_count}</code>\n" if twofa_count > 0 else ""
+    else:
+        hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code>"
+        twofa_line = ""
 
         summary = f"""
 <b>📊 Scan Completed ✅</b>
