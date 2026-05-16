@@ -518,6 +518,7 @@ def get_user_stats(user_id: int):
         "total_scans": 0,
         "total_hits": 0,
         "total_free": 0,
+        "total_2fa": 0,
         "total_combo_files": 0,
         "today_date": str(datetime.now(PH_TZ).date()),
         "today_scans": 0,
@@ -870,6 +871,7 @@ async def show_statistics_menu(query, context):
 ✅ Total Scans: <code>{stats['total_scans']}</code>
 📁 Total Files Processed: <code>{total_files}</code>
 💎 Total Hits: <code>{stats['total_hits']}</code>
+🔐 Total 2FA: <code>{stats.get('total_2fa', 0)}</code>
 ❌ Total Bad: <code>{stats.get('total_free', 0)}</code>
 🎯 Success Rate: <code>{success_rate}%</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2159,11 +2161,13 @@ async def handle_message(update: Update, context: CallbackContext):
             
             hits_increment = 1 if result['success'] else 0
             bad_increment = 1 if not result['success'] else 0
-            
+            twofa_increment = 1 if result.get('twofa') else 0
+
             update_user_stats(user_id, {
                 "total_scans": stats["total_scans"] + 1,
                 "total_hits": stats["total_hits"] + hits_increment,
                 "total_free": stats.get("total_free", 0) + bad_increment,
+                "total_2fa": stats.get("total_2fa", 0) + twofa_increment,
                 "today_scans": stats["today_scans"] + 1
             })
             return
@@ -2452,11 +2456,13 @@ async def handle_document(update: Update, context: CallbackContext):
         hits_count = len(hits)
         bad_count = total - hits_count
         current_stats = get_user_stats(user_id)
+        twofa_count_bulk = len([h for h in hits if h.get('twofa')])
 
         update_user_stats(user_id, {
             "total_scans": current_stats["total_scans"] + total,
             "total_hits": current_stats["total_hits"] + hits_count,
             "total_free": current_stats.get("total_free", 0) + bad_count,
+            "total_2fa": current_stats.get("total_2fa", 0) + twofa_count_bulk,
             "today_scans": current_stats["today_scans"] + total
         })
 
