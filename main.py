@@ -2424,35 +2424,64 @@ async def handle_document(update: Update, context: CallbackContext):
 
     def check_account(acc):
         """Worker that polls Supabase for pause/cancel"""
+        # Check before doing anything
         status = get_scan_status(scan_id)
         if status == "stopped":
             return None
 
-        # Wait while paused (polls every 0.5s)
+        # Wait while paused BEFORE starting this account
+        pause_start = time.time()
         while True:
             status = get_scan_status(scan_id)
             if status == "running":
                 break
             if status == "stopped":
                 return None
-            time.sleep(0.5)
+            # Auto-stop after 10 minutes of being paused
+            if time.time() - pause_start > 600:
+                set_scan_status(scan_id, "stopped")
+                return None
+            time.sleep(0.3)
 
         email, pwd = acc
-        rate_limiter.acquire()
 
-        # ← Check AGAIN right before the actual request
+        # Check again after pause wait
         if get_scan_status(scan_id) == "stopped":
             return None
+
+        rate_limiter.acquire()
+
+        # Check again after rate limiter (can block for a bit)
+        status = get_scan_status(scan_id)
+        if status == "stopped":
+            return None
+
+        # Wait while paused AGAIN (in case paused during rate limiter wait)
+        while True:
+            status = get_scan_status(scan_id)
+            if status == "running":
+                break
+            if status == "stopped":
+                return None
+            time.sleep(0.3)
 
         mode = stats.get("api_mode", "Crunchyroll")
         checker = get_checker_function(mode, user_id)
         result = checker(email, pwd)
 
-        # ← Check AGAIN after the request finishes
+        # Check after the HTTP request completes
         if get_scan_status(scan_id) == "stopped":
             return None
 
-        time.sleep(0.8 + random.uniform(0.6, 1.2))
+        # Wait while paused AFTER result (before returning to queue)
+        while True:
+            status = get_scan_status(scan_id)
+            if status == "running":
+                break
+            if status == "stopped":
+                return None
+            time.sleep(0.3)
+
         return result
 
     completed = 0
@@ -2473,7 +2502,23 @@ async def handle_document(update: Update, context: CallbackContext):
         ]
         
         for coro in asyncio.as_completed(futures):
-            if get_scan_status(scan_id) == "stopped":
+            scan_status = get_scan_status(scan_id)
+            if scan_status == "stopped":
+                break
+
+            # When paused, hold the main loop too (stops progress updates)
+            pause_start_main = time.time()
+            while scan_status == "paused":
+                await asyncio.sleep(0.5)
+                scan_status = get_scan_status(scan_id)
+                if scan_status == "stopped":
+                    break
+                # Auto-stop after 10 minutes of being paused
+                if time.time() - pause_start_main > 600:
+                    set_scan_status(scan_id, "stopped")
+                    break
+
+            if scan_status == "stopped":
                 break
 
             result = await coro  # ← await lets other callbacks run between results
@@ -2490,7 +2535,10 @@ async def handle_document(update: Update, context: CallbackContext):
                 bad_so_far = completed - len(hits)
 
                 current_status = get_scan_status(scan_id)
-                status_title = "⏸️ <b>PAUSED</b> 🔄" if current_status == "paused" else "📊 <b>Scan In Progress</b> 🔄"
+                if current_status == "paused":
+                    status_title = "⏸️ <b>PAUSED</b> — Auto-stops in 10 min if not resumed"
+                else:
+                    status_title = "📊 <b>Scan In Progress</b> 🔄"
 
                 # Rebuild keyboard every update (keeps 3 buttons alive)
                 keyboard = [
@@ -2536,10 +2584,35 @@ async def handle_document(update: Update, context: CallbackContext):
     twofa_count_bulk = len([h for h in hits if h.get('twofa')])
 
     if final_status == "stopped" and completed < total:
-        await progress_msg.edit_text(
-            f"⏹️ <b>Scan Stopped</b>\n\nProcessed: {completed}/{total}\n✅ Hits: {hits_count}\n❌ Bad: {bad_count}",
-            parse_mode='HTML'
-        )
+            elapsed_sec = int(time.time() - start_time)
+            cpm = int((completed / elapsed_sec) * 60) if elapsed_sec > 0 else 0
+            percent = int((completed / total) * 100)
+
+            mode_name_stop = stats.get("api_mode", "Crunchyroll")
+            if mode_name_stop == "Steam":
+                twofa_stop = len([h for h in hits if h.get('twofa')])
+                normal_stop = hits_count - twofa_stop
+                hit_line_stop = f"✅ <b>Hits:</b> <code>{hits_count}</code> (<code>{normal_stop} Normal + {twofa_stop} 2FA</code>)"
+            else:
+                hit_line_stop = f"✅ <b>Hits:</b> <code>{hits_count}</code>"
+
+            await progress_msg.edit_text(
+                f"📊 <b>Scan Stopped ✅</b>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📁 File: <code>{document.file_name}</code>\n"
+                f"🔢 <b>Processed:</b> <code>{completed}/{total}</code> (<code>{percent}%</code>)\n"
+                f"🧵 <b>Threads:</b> <code>{user_threads}</code>\n"
+                f"📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"{hit_line_stop}\n"
+                f"❌ <b>Bad:</b> <code>{bad_count}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"⏱ <b>Elapsed:</b> <code>{elapsed_sec//60:02d}m {elapsed_sec%60:02d}s</code>\n"
+                f"⚡ <b>CPM:</b> <code>{cpm}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━",
+                parse_mode='HTML'
+            )
+            await manage_result_pin(update, context, progress_msg.message_id)
     else:   
         # ====================== IMPROVED SUMMARY WITH 2FA BREAKDOWN ======================
         elapsed = int(time.time() - start_time)
