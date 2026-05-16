@@ -85,6 +85,16 @@ MODES = {
     },
 }
 
+# ============= PROXYLESS BANNER (Reusable & Easy to Edit) =============
+def get_proxyless_banner() -> str:
+    """Reusable proxyless banner - change it in ONE place only"""
+    return """🚀 <b>PROXYLESS MODE</b> ✅
+• No proxy list required
+• Ultra fast & stable checks
+• Works instantly on all plans
+━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
 # ============= SCAN CONTROL VIA SUPABASE =============
 def set_scan_status(scan_id: str, status: str):
     supabase.table("active_scans").upsert({
@@ -1027,6 +1037,7 @@ async def show_api_mode_menu(query, context):
     text = f"""
 📡 <b>API Mode Selection</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
+{get_proxyless_banner()}
 {mode_info["icon"]} <b>{mode_info["display"]}</b>
 {features_text}
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1902,6 +1913,7 @@ async def start(update: Update, context: CallbackContext):
     welcome = f"""
 <b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
+{get_proxyless_banner()}
 📤 <b>Send your combo list (.txt file)</b>
 <i>Format: mail:pass (one per line)</i>
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2503,6 +2515,7 @@ async def edit_to_main_menu(update_or_query, context):
     welcome = f"""
 <b>𝗪𝗘𝗟𝗖𝗢𝗠𝗘 𝗧𝗢 𝗖𝗔𝗬'𝗦 • 𝗖𝗛𝗘𝗖𝗞𝗘𝗥 𝗕𝗢𝗧</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
+{get_proxyless_banner()}
 📤 <b>Send your combo list (.txt file)</b>
 <i>Format: mail:pass (one per line)</i>
 ━━━━━━━━━━━━━━━━━━━━━━━━
