@@ -1225,10 +1225,13 @@ Try another account!
 
     # ==================== STEAM ====================
     if mode == "Steam":
+        visibility_emoji = "✅" if result.get('profile_visibility') == "Public" \
+            else "🔒" if result.get('profile_visibility') == "Private" \
+            else "👥"
         # Base header (same for both 2FA and normal)
         text = f"""✅ <b>STEAM HIT!</b>
 
-        text += f"\n{visibility_emoji} <b>Profile:</b> <code>{result.get('profile_visibility', 'Unknown')}</code>"
+{visibility_emoji} <b>Profile:</b> <code>{result.get('profile_visibility', 'Unknown')}</code>
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
 🆔 <b>SteamID:</b> <code>{result.get('steamid', 'N/A')}</code>
@@ -1272,7 +1275,6 @@ Try another account!
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
 
         # Country + footer (always at the bottom, only once)
-        visibility_emoji = "✅" if result.get('profile_visibility') == "Public" else "🔒" if result.get('profile_visibility') == "Private" else "👥"
         text += f"\n🌍 <b>Country:</b> {country_display}"
         text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
         text += f"\nChannel: {CHANNEL_USERNAME}"
