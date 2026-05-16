@@ -76,7 +76,7 @@ MODES = {
         "icon": "🛠️",
         "color": "🛠️",
         "features": [
-            "Checks Steam accounts (username:password)",
+            "Checks Steam accounts",
             "Detects valid accounts + SteamID",
             "Detects 2FA required accounts",
             "Saves Hits + 2FA + Bad separately",
@@ -1037,26 +1037,30 @@ async def show_api_mode_menu(query, context):
 📡 <b>API Mode Selection</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 {get_proxyless_banner()}
+<b>Current Mode:</b> <code>{mode_info["color"]} {mode_info["display"]}</code>
 {mode_info["icon"]} <b>{mode_info["display"]}</b>
 {features_text}
 ━━━━━━━━━━━━━━━━━━━━━━━━
-<b>Current Mode:</b> <code>{mode_info["color"]} {mode_info["display"]}</code>
-
 Click on a mode below to switch:
     """.strip()
 
-    # ====================== CUSTOM KEYBOARD LAYOUT ======================
+    # ====================== FULLY DYNAMIC KEYBOARD ======================
     keyboard = []
+    modes_list = list(MODES.keys())
     
-    # First row: Crunchyroll + Vivamax
-    row1 = []
-    for mode_key in ["Crunchyroll", "Vivamax"]:
-        info = MODES[mode_key]
-        button_text = f"{info['color']} {info['display']}" if mode_key == current_mode else f"{info['icon']} {info['display']}"
-        row1.append(InlineKeyboardButton(button_text, callback_data=f"set_mode:{mode_key}"))
-    keyboard.append(row1)
-
-    # Second row: Steam + Back to Settings (side by side as requested)
+    # Main modes (everything except Steam)
+    main_modes = [m for m in modes_list if m != "Steam"]
+    
+    # Create rows of 2 buttons for main modes
+    for i in range(0, len(main_modes), 2):
+        row = []
+        for mode_key in main_modes[i:i+2]:
+            info = MODES[mode_key]
+            button_text = f"{info['color']} {info['display']}" if mode_key == current_mode else f"{info['icon']} {info['display']}"
+            row.append(InlineKeyboardButton(button_text, callback_data=f"set_mode:{mode_key}"))
+        keyboard.append(row)
+    
+    # Last row: Steam + Back to Settings (side by side - as you requested)
     steam_info = MODES["Steam"]
     steam_text = f"{steam_info['color']} {steam_info['display']}" if current_mode == "Steam" else f"{steam_info['icon']} {steam_info['display']}"
     
