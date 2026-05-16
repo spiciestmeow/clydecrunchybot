@@ -1262,6 +1262,8 @@ Try another account!
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
 
         # Country + footer (always at the bottom, only once)
+        visibility_emoji = "✅" if result.get('profile_visibility') == "Public" else "🔒" if result.get('profile_visibility') == "Private" else "👥"
+        text += f"\n{visibility_emoji} <b>Profile:</b> <code>{result.get('profile_visibility', 'Unknown')}</code>"
         text += f"\n🌍 <b>Country:</b> {country_display}"
         text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
         text += f"\nChannel: {CHANNEL_USERNAME}"
@@ -1384,6 +1386,7 @@ def check_steam(username: str, password: str, proxy=None, _retry=0) -> dict:
         'email': username,
         'password': password,
         'success': False,
+        'profile_visibility': 'Unknown', 
         'message': '',
         'steamid': 'N/A',
         'twofa': False,
@@ -1535,6 +1538,8 @@ def check_steam(username: str, password: str, proxy=None, _retry=0) -> dict:
                     result['profile_name'] = data.get("personaname", "Unknown")
                     result['profile_url'] = data.get("profileurl", "")
                     result['country'] = data.get("loccountrycode", "Unknown")
+                    visibility = data.get("communityvisibilitystate", 1)
+                    result['profile_visibility'] = {1: "Private", 2: "Friends Only", 3: "Public"}.get(visibility, "Unknown")
 
                 # Owned Games
                 games_count = 0
