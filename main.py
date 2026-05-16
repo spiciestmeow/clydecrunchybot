@@ -205,6 +205,20 @@ def get_mode_display(mode_key: str = None) -> str:
     mode_info = MODES[mode_key]
     return f"{mode_info['icon']} {mode_info['display']}"
 
+# ============= PLAN WITH EMOJI HELPER =============
+def get_plan_with_emoji(plan_key: str) -> str:
+    """Returns plan with its specific emoji (matches Membership Plans)"""
+    plan_key = (plan_key or "FREE").upper()
+    emojis = {
+        "FREE": "🆓",
+        "BASIC": "⭐",
+        "VIP": "👑",
+        "YEARLY": "🌟"
+    }
+    emoji = emojis.get(plan_key, "📌")
+    config = PLAN_CONFIG.get(plan_key, PLAN_CONFIG["FREE"])
+    return f"{emoji} {config['display_name']}"
+
 # ============= MODE DISPATCHER =============
 def get_checker_function(api_mode: str, user_id: int = None):
     """Returns the correct checker function + blocks normal users from Vivamax"""
@@ -729,7 +743,7 @@ async def show_membership_menu(query, context):
     stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
     
-    current_plan_text = f"📌 Your Current Plan: <b>{limits['display_name']}</b>"
+    current_plan_text = f"📌 Your Current Plan: <b>{get_plan_with_emoji(stats.get('plan'))}</b>"
     
     text = f"""
 👑 <b>MEMBERSHIP PLANS</b>
@@ -811,7 +825,7 @@ async def show_statistics_menu(query, context):
 ━━━━━━━━━━━━━━━━━━━━━━━━
 👤 <b>User ID:</b> <code>{stats['user_id']}</code>
 📅 <b>Registered:</b> <code>{stats['registered']}</code>
-👑 <b>Plan:</b> <code>{stats['plan']}</code>
+👑 <b>Plan:</b> <code>{get_plan_with_emoji(stats.get('plan'))}</code>
 📆 <b>Plan Expires In:</b> <code>{get_days_remaining(stats['expires'])}</code>
 📡 <b>Mode:</b> <code>{get_mode_display(stats.get('api_mode'))}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1937,7 +1951,7 @@ async def start(update: Update, context: CallbackContext):
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
 📁 Files Today: <code><b>{files_display}</b></code>
-👑 Plan: <code><b>{limits['display_name']}</b></code>
+👑 Plan: <code><b>{get_plan_with_emoji(stats.get('plan'))}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
 📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
@@ -2539,7 +2553,7 @@ async def edit_to_main_menu(update_or_query, context):
 📊<b>Your Dashboard:</b>
 🧵 Threads: <code><b>{limits['current_threads']}/{limits['max_threads']}</b></code>
 📁 Files Today: <code><b>{files_display}</b></code>
-👑 Plan: <code><b>{limits['display_name']}</b></code>
+👑 Plan: <code><b>{get_plan_with_emoji(stats.get('plan'))}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} combos</b></code>
 📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
