@@ -2532,32 +2532,22 @@ async def handle_document(update: Update, context: CallbackContext):
             f"⏹️ <b>Scan Stopped</b>\n\nProcessed: {completed}/{total}\n✅ Hits: {hits_count}\n❌ Bad: {bad_count}",
             parse_mode='HTML'
         )
-    else:
-        pass
+    else:   
+        # ====================== IMPROVED SUMMARY WITH 2FA BREAKDOWN ======================
+        elapsed = int(time.time() - start_time)
+        cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
 
-    update_user_stats(user_id, {
-        "total_scans": current_stats["total_scans"] + completed,
-        "total_hits": current_stats["total_hits"] + hits_count,
-        "total_free": current_stats.get("total_free", 0) + bad_count,
-        "total_2fa": current_stats.get("total_2fa", 0) + twofa_count_bulk,
-        "today_scans": current_stats["today_scans"] + completed
-    })
-
-    # ====================== IMPROVED SUMMARY WITH 2FA BREAKDOWN ======================
-    elapsed = int(time.time() - start_time)
-    cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
-
-    mode_name = stats.get("api_mode", "Crunchyroll")
-    
-    if mode_name == "Steam":
-        twofa_count = len([hit for hit in hits if hit.get('twofa')])
-        normal_hits = hits_count - twofa_count
+        mode_name = stats.get("api_mode", "Crunchyroll")
         
-        hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code> (<code>{normal_hits} Normal + {twofa_count} 2FA</code>)"
-        twofa_line = f"🔐 <b>2FA Required:</b> <code>{twofa_count}</code>\n" if twofa_count > 0 else ""
-    else:
-        hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code>"
-        twofa_line = ""
+        if mode_name == "Steam":
+            twofa_count = len([hit for hit in hits if hit.get('twofa')])
+            normal_hits = hits_count - twofa_count
+            
+            hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code> (<code>{normal_hits} Normal + {twofa_count} 2FA</code>)"
+            twofa_line = f"🔐 <b>2FA Required:</b> <code>{twofa_count}</code>\n" if twofa_count > 0 else ""
+        else:
+            hit_line = f"✅ <b>HITS:</b> <code>{hits_count}</code>"
+            twofa_line = ""
 
         summary = f"""
 <b>📊 Scan Completed ✅</b>
@@ -2577,83 +2567,91 @@ async def handle_document(update: Update, context: CallbackContext):
         await progress_msg.edit_text(summary, parse_mode='HTML')
         await manage_result_pin(update, context, progress_msg.message_id)
 
-        # ====================== HITS + BAD + 2FA FILES (mode-aware) ======================
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        mode_name = stats.get("api_mode", "Crunchyroll")
-        
-        if hits_count > 0:
-            current_stats = get_user_stats(user_id)
-            user_plan = current_stats.get("plan", "FREE").upper()
+    update_user_stats(user_id, {
+        "total_scans": current_stats["total_scans"] + completed,
+        "total_hits": current_stats["total_hits"] + hits_count,
+        "total_free": current_stats.get("total_free", 0) + bad_count,
+        "total_2fa": current_stats.get("total_2fa", 0) + twofa_count_bulk,
+        "today_scans": current_stats["today_scans"] + completed
+    })
 
-            hits_text = f"🎉 {mode_name.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
-            for hit in hits:
-                hits_text += format_hit_for_file(hit, user_plan, mode_name)
+    # ====================== HITS + BAD + 2FA FILES (mode-aware) ======================
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    mode_name = stats.get("api_mode", "Crunchyroll")
+    
+    if hits_count > 0:
+        current_stats = get_user_stats(user_id)
+        user_plan = current_stats.get("plan", "FREE").upper()
 
-            hits_file = f"/tmp/{mode_name.lower()}_hits_{timestamp}.txt"
-            with open(hits_file, "w", encoding="utf-8") as f:
-                f.write(hits_text)
+        hits_text = f"🎉 {mode_name.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
+        for hit in hits:
+            hits_text += format_hit_for_file(hit, user_plan, mode_name)
 
-            fancy_caption = f"""
+        hits_file = f"/tmp/{mode_name.lower()}_hits_{timestamp}.txt"
+        with open(hits_file, "w", encoding="utf-8") as f:
+            f.write(hits_text)
+
+        fancy_caption = f"""
 👍 <b>{hits_count}x {mode_name} Hits</b>
 ────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────
 <a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/caydigitals">Admin</a>
-            """.strip()
+        """.strip()
+
+        await update.message.reply_document(
+            document=open(hits_file, "rb"),
+            filename=f"{mode_name} Hits @caydigitals.txt",
+            caption=fancy_caption,
+            parse_mode='HTML'
+        )
+
+    # === Save separate 2FA file for Steam ===
+    if mode_name == "Steam":
+        twofa_accounts = [hit for hit in hits if hit.get('twofa')]
+        if twofa_accounts:
+            twofa_text = f"🔐 STEAM 2FA ACCOUNTS - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+            twofa_text += "="*60 + "\n\n"
+            for acc in twofa_accounts:
+                twofa_text += f"{acc['email']}:{acc['password']} | SteamID: {acc.get('steamid','N/A')}\n"
+            
+            twofa_file = f"/tmp/steam_2fa_{timestamp}.txt"
+            with open(twofa_file, "w", encoding="utf-8") as f:
+                f.write(twofa_text)
 
             await update.message.reply_document(
-                document=open(hits_file, "rb"),
-                filename=f"{mode_name} Hits @caydigitals.txt",
-                caption=fancy_caption,
+                document=open(twofa_file, "rb"),
+                filename=f"Steam 2FA @caydigitals.txt",
+                caption=f"🔐 {len(twofa_accounts)}x Steam Accounts with 2FA",
                 parse_mode='HTML'
             )
 
-        # === Save separate 2FA file for Steam ===
-        if mode_name == "Steam":
-            twofa_accounts = [hit for hit in hits if hit.get('twofa')]
-            if twofa_accounts:
-                twofa_text = f"🔐 STEAM 2FA ACCOUNTS - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-                twofa_text += "="*60 + "\n\n"
-                for acc in twofa_accounts:
-                    twofa_text += f"{acc['email']}:{acc['password']} | SteamID: {acc.get('steamid','N/A')}\n"
-                
-                twofa_file = f"/tmp/steam_2fa_{timestamp}.txt"
-                with open(twofa_file, "w", encoding="utf-8") as f:
-                    f.write(twofa_text)
+    if bad_count > 0:
+        hit_emails = {hit['email'] for hit in hits}
+        bad_lines = [f"{email}:{pwd} | Check_By = @caydigitals" for email, pwd in accounts if email not in hit_emails]
+        
+        bad_text = f"❌ BAD ACCOUNTS | {mode_name}\n"
+        bad_text += f"{'='*40}\n"
+        bad_text += "\n".join(bad_lines)
+        
+        bad_file = f"/tmp/{mode_name.lower()}_bad_{timestamp}.txt"
+        with open(bad_file, "w", encoding="utf-8") as f:
+            f.write(bad_text)
 
-                await update.message.reply_document(
-                    document=open(twofa_file, "rb"),
-                    filename=f"Steam 2FA @caydigitals.txt",
-                    caption=f"🔐 {len(twofa_accounts)}x Steam Accounts with 2FA",
-                    parse_mode='HTML'
-                )
-
-        if bad_count > 0:
-            hit_emails = {hit['email'] for hit in hits}
-            bad_lines = [f"{email}:{pwd} | Check_By = @caydigitals" for email, pwd in accounts if email not in hit_emails]
-            
-            bad_text = f"❌ BAD ACCOUNTS | {mode_name}\n"
-            bad_text += f"{'='*40}\n"
-            bad_text += "\n".join(bad_lines)
-            
-            bad_file = f"/tmp/{mode_name.lower()}_bad_{timestamp}.txt"
-            with open(bad_file, "w", encoding="utf-8") as f:
-                f.write(bad_text)
-
-            bad_caption = f"""
+        bad_caption = f"""
 ❌ <b>{bad_count}x Bad Accounts</b>
 ────────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────────
 <a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/caydigitals">Admin</a>
-            """.strip()
+        """.strip()
 
-            await update.message.reply_document(
-                document=open(bad_file, "rb"),
-                filename=f"{mode_name} Bad @caydigitals.txt",
-                caption=bad_caption,
-                parse_mode='HTML'
-            )
+        await update.message.reply_document(
+            document=open(bad_file, "rb"),
+            filename=f"{mode_name} Bad @caydigitals.txt",
+            caption=bad_caption,
+            parse_mode='HTML'
+        )
 
     # Cleanup
     delete_scan(scan_id)
