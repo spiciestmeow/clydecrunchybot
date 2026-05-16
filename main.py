@@ -581,7 +581,7 @@ Your daily limit increases by {bonus_per} lines for each person who registers us
 ━━━━━━━━━━━━━━━━━━━━━━━
     """.strip()
 
-    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
+    keyboard = [[InlineKeyboardButton("↼ Back", callback_data="back_to_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(
@@ -605,7 +605,7 @@ async def show_support_menu(query, context):
 
     # Inline keyboard (Back button at the bottom, exactly like the screenshot)
     keyboard = [
-        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+        [InlineKeyboardButton("↼ Back", callback_data="back_to_main")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -647,7 +647,7 @@ Claim your daily free lines or redeem premium gift codes provided by the admin.
     keyboard = [
         [InlineKeyboardButton(claim_button_text, callback_data="claim_daily_reward")],
         [InlineKeyboardButton("📦 REDEEM GIFT CODE", callback_data="redeem_gift_code")],
-        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+        [InlineKeyboardButton("↼ Back", callback_data="back_to_main")]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -756,7 +756,7 @@ Telegram Stars only (currently accepted)
 Contact: <a href="https://t.me/caydigitals">@caydigitals</a>
     """.strip()
 
-    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
+    keyboard = [[InlineKeyboardButton("↼ Back", callback_data="back_to_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
@@ -816,7 +816,7 @@ async def show_statistics_menu(query, context):
 📦 Base Plan Limit: <code>{limits['base_limit_text']}</code>
     """.strip()
 
-    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]]
+    keyboard = [[InlineKeyboardButton("↼ Back", callback_data="back_to_main")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
@@ -972,7 +972,7 @@ Current: <code>{get_mode_display(stats.get('api_mode'))}</code>
             InlineKeyboardButton("🧵 Set Threads", callback_data="set_threads"),
             InlineKeyboardButton("📡 API Mode", callback_data="set_api_mode"),
         ],
-        [InlineKeyboardButton("🔙 Back", callback_data="back_to_main")]
+        [InlineKeyboardButton("↼ Back", callback_data="back_to_main")]
     ]
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1007,7 +1007,7 @@ Current threads: <b>{limits['current_threads']}</b>
 Send a number between 1 and {max_t} to set your thread count.
     """.strip()
     
-    keyboard = [[InlineKeyboardButton("🔙 Back", callback_data="menu_settings")]]
+    keyboard = [[InlineKeyboardButton("↼ Back", callback_data="menu_settings")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.edit_message_text(text, parse_mode='HTML', reply_markup=reply_markup)
@@ -1052,7 +1052,7 @@ Click on a mode below to switch:
     
     keyboard.append([
         InlineKeyboardButton(steam_text, callback_data="set_mode:Steam"),
-        InlineKeyboardButton("🔙 Back to Settings", callback_data="menu_settings")
+        InlineKeyboardButton("↼ Back to Settings", callback_data="menu_settings")
     ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
