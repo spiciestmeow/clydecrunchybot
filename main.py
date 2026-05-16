@@ -109,22 +109,20 @@ async def animate_progress(status_msg, email, stop_event):
         if stop_event.is_set():
             return
         
-        # Build progress bar
-        filled = int(percent / 10)  # out of 10 blocks
-        bar = "█" * filled + "░" * (10 - filled)
-        
         try:
             await status_msg.edit_text(
-                f"🔍 <b>Checking:</b> <code>{email}</code>\n"
+                f"🔍 <b>Checking Account</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"[{bar}] <code>{percent}%</code>\n"
-                f"📌 {label}",
+                f"📧 <code>{email}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📌 {label}\n"
+                f"⚡ Progress: <b>{percent}%</b>",
                 parse_mode='HTML'
             )
         except:
             pass
         
-        await asyncio.sleep(1.2)  # adjust speed here
+        await asyncio.sleep(1.2)
 
 # ============= SCAN CONTROL VIA SUPABASE =============
 def set_scan_status(scan_id: str, status: str):
@@ -2175,10 +2173,12 @@ async def handle_message(update: Update, context: CallbackContext):
             rate_limiter.acquire()   # ← This was missing!
             
             status_msg = await update.message.reply_text(
-                f"🔍 <b>Checking:</b> <code>{email}</code>\n"
+                f"🔍 <b>Checking Account</b>\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"[░░░░░░░░░░] <code>0%</code>\n"
-                f"📌 Starting...",
+                f"📧 <code>{email}</code>\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"📌 🔍 Connecting to server...\n"
+                f"⚡ Progress: <b>0%</b>",
                 parse_mode='HTML'
             )
             try:
@@ -2200,12 +2200,13 @@ async def handle_message(update: Update, context: CallbackContext):
                 progress_task.cancel()
                 
                 # Show 100% briefly before result
-                bar_full = "█" * 10
                 await status_msg.edit_text(
-                    f"🔍 <b>Checking:</b> <code>{email}</code>\n"
+                    f"🔍 <b>Checking Account</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"[{bar_full}] <code>100%</code>\n"
-                    f"✅ Done!",
+                    f"📧 <code>{email}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"✅ Done!\n"
+                    f"⚡ Progress: <b>100%</b>",
                     parse_mode='HTML'
                 )
                 await asyncio.sleep(0.5)
