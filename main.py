@@ -2522,17 +2522,28 @@ async def handle_document(update: Update, context: CallbackContext):
 
     # ====================== CLEANUP & FINISH ======================
     final_status = get_scan_status(scan_id)
-    hits_count = len(hits)
-    bad_count = completed - hits_count
-    current_stats = get_user_stats(user_id)
-    twofa_count_bulk = len([h for h in hits if h.get('twofa')])
-
     if final_status == "stopped" and completed < total:
+        # Stopped early — still send partial results if any hits
+        hits_count = len(hits)
         await progress_msg.edit_text(
-            f"⏹️ <b>Scan Stopped</b>\n\nProcessed: {completed}/{total}\n✅ Hits: {hits_count}\n❌ Bad: {bad_count}",
+            f"⏹️ <b>Scan Stopped</b>\n\nProcessed: {completed}/{total}\n✅ Hits: {hits_count}",
             parse_mode='HTML'
         )
-    else:   
+    else:
+        # Your original finish logic
+        hits_count = len(hits)
+        bad_count = total - hits_count
+        current_stats = get_user_stats(user_id)
+        twofa_count_bulk = len([h for h in hits if h.get('twofa')])
+
+        update_user_stats(user_id, {
+            "total_scans": current_stats["total_scans"] + total,
+            "total_hits": current_stats["total_hits"] + hits_count,
+            "total_free": current_stats.get("total_free", 0) + bad_count,
+            "total_2fa": current_stats.get("total_2fa", 0) + twofa_count_bulk,
+            "today_scans": current_stats["today_scans"] + total
+        })
+
         # ====================== IMPROVED SUMMARY WITH 2FA BREAKDOWN ======================
         elapsed = int(time.time() - start_time)
         cpm = int((total / elapsed) * 60) if elapsed > 0 else 0
@@ -2567,91 +2578,83 @@ async def handle_document(update: Update, context: CallbackContext):
         await progress_msg.edit_text(summary, parse_mode='HTML')
         await manage_result_pin(update, context, progress_msg.message_id)
 
-    update_user_stats(user_id, {
-        "total_scans": current_stats["total_scans"] + completed,
-        "total_hits": current_stats["total_hits"] + hits_count,
-        "total_free": current_stats.get("total_free", 0) + bad_count,
-        "total_2fa": current_stats.get("total_2fa", 0) + twofa_count_bulk,
-        "today_scans": current_stats["today_scans"] + completed
-    })
+        # ====================== HITS + BAD + 2FA FILES (mode-aware) ======================
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        mode_name = stats.get("api_mode", "Crunchyroll")
+        
+        if hits_count > 0:
+            current_stats = get_user_stats(user_id)
+            user_plan = current_stats.get("plan", "FREE").upper()
 
-    # ====================== HITS + BAD + 2FA FILES (mode-aware) ======================
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    mode_name = stats.get("api_mode", "Crunchyroll")
-    
-    if hits_count > 0:
-        current_stats = get_user_stats(user_id)
-        user_plan = current_stats.get("plan", "FREE").upper()
+            hits_text = f"🎉 {mode_name.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
+            for hit in hits:
+                hits_text += format_hit_for_file(hit, user_plan, mode_name)
 
-        hits_text = f"🎉 {mode_name.upper()} HITS - {user_plan} PLAN\n" + "="*70 + "\n\n"
-        for hit in hits:
-            hits_text += format_hit_for_file(hit, user_plan, mode_name)
+            hits_file = f"/tmp/{mode_name.lower()}_hits_{timestamp}.txt"
+            with open(hits_file, "w", encoding="utf-8") as f:
+                f.write(hits_text)
 
-        hits_file = f"/tmp/{mode_name.lower()}_hits_{timestamp}.txt"
-        with open(hits_file, "w", encoding="utf-8") as f:
-            f.write(hits_text)
-
-        fancy_caption = f"""
+            fancy_caption = f"""
 👍 <b>{hits_count}x {mode_name} Hits</b>
 ────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────
 <a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/caydigitals">Admin</a>
-        """.strip()
-
-        await update.message.reply_document(
-            document=open(hits_file, "rb"),
-            filename=f"{mode_name} Hits @caydigitals.txt",
-            caption=fancy_caption,
-            parse_mode='HTML'
-        )
-
-    # === Save separate 2FA file for Steam ===
-    if mode_name == "Steam":
-        twofa_accounts = [hit for hit in hits if hit.get('twofa')]
-        if twofa_accounts:
-            twofa_text = f"🔐 STEAM 2FA ACCOUNTS - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
-            twofa_text += "="*60 + "\n\n"
-            for acc in twofa_accounts:
-                twofa_text += f"{acc['email']}:{acc['password']} | SteamID: {acc.get('steamid','N/A')}\n"
-            
-            twofa_file = f"/tmp/steam_2fa_{timestamp}.txt"
-            with open(twofa_file, "w", encoding="utf-8") as f:
-                f.write(twofa_text)
+            """.strip()
 
             await update.message.reply_document(
-                document=open(twofa_file, "rb"),
-                filename=f"Steam 2FA @caydigitals.txt",
-                caption=f"🔐 {len(twofa_accounts)}x Steam Accounts with 2FA",
+                document=open(hits_file, "rb"),
+                filename=f"{mode_name} Hits @caydigitals.txt",
+                caption=fancy_caption,
                 parse_mode='HTML'
             )
 
-    if bad_count > 0:
-        hit_emails = {hit['email'] for hit in hits}
-        bad_lines = [f"{email}:{pwd} | Check_By = @caydigitals" for email, pwd in accounts if email not in hit_emails]
-        
-        bad_text = f"❌ BAD ACCOUNTS | {mode_name}\n"
-        bad_text += f"{'='*40}\n"
-        bad_text += "\n".join(bad_lines)
-        
-        bad_file = f"/tmp/{mode_name.lower()}_bad_{timestamp}.txt"
-        with open(bad_file, "w", encoding="utf-8") as f:
-            f.write(bad_text)
+        # === Save separate 2FA file for Steam ===
+        if mode_name == "Steam":
+            twofa_accounts = [hit for hit in hits if hit.get('twofa')]
+            if twofa_accounts:
+                twofa_text = f"🔐 STEAM 2FA ACCOUNTS - {datetime.now().strftime('%Y-%m-%d %H:%M')}\n"
+                twofa_text += "="*60 + "\n\n"
+                for acc in twofa_accounts:
+                    twofa_text += f"{acc['email']}:{acc['password']} | SteamID: {acc.get('steamid','N/A')}\n"
+                
+                twofa_file = f"/tmp/steam_2fa_{timestamp}.txt"
+                with open(twofa_file, "w", encoding="utf-8") as f:
+                    f.write(twofa_text)
 
-        bad_caption = f"""
+                await update.message.reply_document(
+                    document=open(twofa_file, "rb"),
+                    filename=f"Steam 2FA @caydigitals.txt",
+                    caption=f"🔐 {len(twofa_accounts)}x Steam Accounts with 2FA",
+                    parse_mode='HTML'
+                )
+
+        if bad_count > 0:
+            hit_emails = {hit['email'] for hit in hits}
+            bad_lines = [f"{email}:{pwd} | Check_By = @caydigitals" for email, pwd in accounts if email not in hit_emails]
+            
+            bad_text = f"❌ BAD ACCOUNTS | {mode_name}\n"
+            bad_text += f"{'='*40}\n"
+            bad_text += "\n".join(bad_lines)
+            
+            bad_file = f"/tmp/{mode_name.lower()}_bad_{timestamp}.txt"
+            with open(bad_file, "w", encoding="utf-8") as f:
+                f.write(bad_text)
+
+            bad_caption = f"""
 ❌ <b>{bad_count}x Bad Accounts</b>
 ────────────────────────────
 ☰ BY @caydigitals ✅
 ────────────────────────────
 <a href="https://t.me/caysredirect">BOT</a> | <a href="https://t.me/caydigitals">Admin</a>
-        """.strip()
+            """.strip()
 
-        await update.message.reply_document(
-            document=open(bad_file, "rb"),
-            filename=f"{mode_name} Bad @caydigitals.txt",
-            caption=bad_caption,
-            parse_mode='HTML'
-        )
+            await update.message.reply_document(
+                document=open(bad_file, "rb"),
+                filename=f"{mode_name} Bad @caydigitals.txt",
+                caption=bad_caption,
+                parse_mode='HTML'
+            )
 
     # Cleanup
     delete_scan(scan_id)
