@@ -1238,7 +1238,7 @@ def format_single_result(result, user_plan="FREE", mode="Crunchyroll"):
     """Mode-aware formatting: Crunchyroll keeps original tiered look, Vivamax gets rich display"""
     country_code = result.get('country', 'ZZ').upper()
     flag = REGION_HINTS.get(country_code, "🌍")
-    country_display = f"{country_code} {flag}" if country_code not in ["ZZ", "UNKNOWN", ""] else f"Unknown 🌍"
+    country_display = f"{country_code} {flag}" if country_code not in ["ZZ", "UNKNOWN", "", "Unknown"] else "Not Set"
 
     if not result.get('success', False):
         return f"""
@@ -1305,7 +1305,8 @@ Try another account!
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
 
         # Country + footer (always at the bottom, only once)
-        text += f"\n🌍 <b>Country:</b> {country_display}"
+        country_display_final = country_display if country_code not in ["Unknown", "ZZ", "", "UNKNOWN"] else "Not Set by User"
+        text += f"\n🌍 <b>Country:</b> {country_display_final}"
         text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
         text += f"\nChannel: {CHANNEL_USERNAME}"
         return text
@@ -1578,7 +1579,8 @@ def check_steam(username: str, password: str, proxy=None, _retry=0) -> dict:
                     data = summary_resp.json().get("response", {}).get("players", [{}])[0]
                     result['profile_name'] = data.get("personaname", "Unknown")
                     result['profile_url'] = data.get("profileurl", "")
-                    result['country'] = data.get("loccountrycode", "Unknown")
+                    country = data.get("loccountrycode", "").strip()
+                    result['country'] = country if country else "Unknown"
                     visibility = data.get("communityvisibilitystate", 1)
                     result['profile_visibility'] = {1: "Private", 2: "Friends Only", 3: "Public"}.get(visibility, "Unknown")
 
