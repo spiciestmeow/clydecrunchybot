@@ -2588,7 +2588,7 @@ async def handle_document(update: Update, context: CallbackContext):
 
                 current_status = get_scan_status(scan_id)
                 if current_status == "paused":
-                    status_title = "⏸️ <b>PAUSED</b> — Auto-stops in 10 min"
+                    status_title = "📊 Scan Paused ⏸️ (Auto-resume in 30s)"
                     keyboard = [[
                         InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
                         InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
@@ -2951,7 +2951,7 @@ async def button_callback(update: Update, context: CallbackContext):
         if progress_msg and last:
             try:
                 if new_status == "paused":
-                    status_title = "⏸️ <b>PAUSED</b> — Auto-stops in 10 min"
+                    status_title = "📊 Scan Paused ⏸️ (Auto-resume in 30s)"
                     keyboard = [[
                         InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
                         InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
