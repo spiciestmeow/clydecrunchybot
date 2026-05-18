@@ -2387,13 +2387,10 @@ async def handle_document(update: Update, context: CallbackContext):
     }
 
     # 3 buttons in ONE clean row
-    keyboard = [
-        [
-            InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
-            InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
-            InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
-        ]
-    ]
+    keyboard = [[
+        InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
+        InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
+    ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     # === YOUR EXACT REQUESTED PROGRESS MESSAGE ===
@@ -2900,16 +2897,49 @@ async def button_callback(update: Update, context: CallbackContext):
         context.user_data['in_main_menu'] = False
         await show_api_mode_menu(query, context)
 
-    elif data.startswith("pause_scan:"):
+    elif data.startswith("pause_scan:") or data.startswith("resume_scan:"):
         scan_id = data.split(":", 1)[1]
-        set_scan_status(scan_id, "paused")
-        await query.answer("⏸️ Scan Paused", show_alert=True)
-        return
-
-    elif data.startswith("resume_scan:"):
-        scan_id = data.split(":", 1)[1]
-        set_scan_status(scan_id, "running")
-        await query.answer("▶️ Scan Resumed", show_alert=True)
+        current_status = get_scan_status(scan_id)
+        
+        # Toggle: paused → running, running → paused
+        new_status = "running" if current_status == "paused" else "paused"
+        set_scan_status(scan_id, new_status)
+        
+        # ← CRITICAL: Update the progress message IMMEDIATELY
+        progress_msg = context.user_data.get('current_scan', {}).get('progress_msg')
+        if progress_msg:
+            try:
+                # Get the current message text
+                msg_text = progress_msg.text
+                
+                # Update header based on new status
+                if new_status == "paused":
+                    msg_text = msg_text.replace(
+                        "📊 <b>Scan In Progress</b> 🔄",
+                        "⏸️ <b>PAUSED</b> — Auto-resumes in 10 sec"
+                    )
+                else:
+                    msg_text = msg_text.replace(
+                        "⏸️ <b>PAUSED</b> — Auto-resumes in 10 sec",
+                        "📊 <b>Scan In Progress</b> 🔄"
+                    )
+                
+                # Rebuild keyboard with UNIFIED toggle button
+                keyboard = [[
+                    InlineKeyboardButton(
+                        "▶️ Resume" if new_status == "paused" else "⏸️ Pause",
+                        callback_data=f"pause_scan:{scan_id}" if new_status == "paused" else f"resume_scan:{scan_id}"
+                    ),
+                    InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
+                ]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # Edit message IMMEDIATELY (don't wait for next progress update)
+                await progress_msg.edit_text(msg_text, parse_mode='HTML', reply_markup=reply_markup)
+                await query.answer(f"{'▶️ Resumed' if new_status == 'running' else '⏸️ Paused'}", show_alert=False)
+            except Exception as e:
+                print(f"⚠️ Failed to update progress message: {e}")
+                await query.answer("⚠️ Failed to update message", show_alert=True)
         return
 
     elif data.startswith("stop_scan:"):
