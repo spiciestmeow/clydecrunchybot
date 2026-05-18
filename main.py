@@ -2933,41 +2933,25 @@ async def button_callback(update: Update, context: CallbackContext):
         new_status = "running" if current_status == "paused" else "paused"
         set_scan_status(scan_id, new_status)
         
-        # ← CRITICAL: Update the progress message IMMEDIATELY
+        # ← CRITICAL: Update keyboard ONLY (don't touch message text to avoid stale data)
         progress_msg = context.user_data.get('current_scan', {}).get('progress_msg')
         if progress_msg:
             try:
-                # Get the current message text
-                msg_text = progress_msg.text
-                
-                # Update header based on new status
-                if new_status == "paused":
-                    msg_text = msg_text.replace(
-                        "📊 <b>Scan In Progress</b> 🔄",
-                        "⏸️ <b>PAUSED</b> — Auto-stops in 10 min" 
-                    )
-                else:
-                    msg_text = msg_text.replace(
-                        "⏸️ <b>PAUSED</b> — Auto-stops in 10 min",
-                        "📊 <b>Scan In Progress</b> 🔄"
-                    )
-                
-                # Rebuild keyboard with UNIFIED toggle button
+                # Just update the keyboard immediately — let progress loop handle text updates
                 keyboard = [[
                     InlineKeyboardButton(
                         "▶️ Resume" if new_status == "paused" else "⏸️ Pause",
-                        callback_data=f"resume_scan:{scan_id}" if new_status == "paused" else f"pause_scan:{scan_id}"  # ✅
+                        callback_data=f"resume_scan:{scan_id}" if new_status == "paused" else f"pause_scan:{scan_id}"
                     ),
                     InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
                 ]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 
-                # Edit message IMMEDIATELY (don't wait for next progress update)
-                await progress_msg.edit_text(msg_text, parse_mode='HTML', reply_markup=reply_markup)
+                await progress_msg.edit_reply_markup(reply_markup=reply_markup)
                 await query.answer(f"{'▶️ Resumed' if new_status == 'running' else '⏸️ Paused'}", show_alert=False)
             except Exception as e:
-                print(f"⚠️ Failed to update progress message: {e}")
-                await query.answer("⚠️ Failed to update message", show_alert=True)
+                print(f"⚠️ Failed to update keyboard: {e}")
+                await query.answer("⚠️ Button update failed", show_alert=True)
         return
 
     elif data.startswith("stop_scan:"):
