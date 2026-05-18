@@ -203,10 +203,12 @@ def get_remaining_reward_time(stats: dict) -> str:
         return "🟢 <b>Ready to Claim!</b>"
 
 def format_files_display(today_files, max_files, plan):
-    """Show '-' for FREE users, actual count for others"""
+    """Show remaining files for PAID plans, '-' for FREE"""
     if plan and plan.upper() == "FREE":
         return "-"
-    return f"{today_files}/{max_files}"
+    
+    remaining = max_files - today_files
+    return f"{remaining}/{max_files}"
 
 def generate_referral_code(user_id: int) -> str:
     """Auto-generate nice referral code like CAY73994"""
@@ -2315,7 +2317,6 @@ async def handle_document(update: Update, context: CallbackContext):
 
     # Paid users (BASIC+) continue with normal file limit check
     max_files = limits.get("multi_scan_max_files", 1)
-
     reset_daily_if_needed(stats, user_id)
     stats = get_user_stats(user_id)
 
@@ -2327,16 +2328,12 @@ async def handle_document(update: Update, context: CallbackContext):
             parse_mode='HTML'
         )
         return
-
-    # Increment counters
-    update_user_stats(user_id, {"today_files": stats.get("today_files", 0) + 1})
-    update_user_stats(user_id, {"total_combo_files": stats.get("total_combo_files", 0) + 1})
-
+    
     # ====================== Normal file processing ======================
     file = await context.bot.get_file(document.file_id)
     file_content = await file.download_as_bytearray()
     lines = file_content.decode('utf-8', errors='ignore').splitlines()
-    
+
     accounts = []
     for line in lines:
         line = line.strip()
@@ -2363,6 +2360,10 @@ async def handle_document(update: Update, context: CallbackContext):
                 parse_mode='HTML'
             )
             return
+
+    # Increment counters
+    update_user_stats(user_id, {"today_files": stats.get("today_files", 0) + 1})
+    update_user_stats(user_id, {"total_combo_files": stats.get("total_combo_files", 0) + 1})
         
     stats = get_user_stats(user_id)
     limits = get_plan_limits(stats)
