@@ -266,14 +266,14 @@ def get_checker_function(api_mode: str, user_id: int = None):
 PLAN_CONFIG = {
     "FREE": {
         "display_name": "FREE",
-        "daily_limit": 15,
+        "daily_limit": 10,
         "max_threads": 8,
         "multi_scan_max_files": 0,
         "queue_waiting": True
     },
     "BASIC": {
         "display_name": "BASIC PLAN (WEEKLY)",
-        "daily_limit": 100,
+        "daily_limit": 150,
         "max_threads": 25,
         "multi_scan_max_files": 3,
         "queue_waiting": False
@@ -298,13 +298,13 @@ PLAN_CONFIG = {
 PLAN_DEFAULTS = {
     "FREE": {
         "plan": "FREE",
-        "base_plan_limit": 15,
+        "base_plan_limit": 10,
         "threads": 8,
         "expires": "N/A"
     },
     "BASIC": {
         "plan": "BASIC",
-        "base_plan_limit": 100,
+        "base_plan_limit": 150,
         "threads": 25   ,
         "expires": (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
     },
@@ -560,7 +560,7 @@ def get_user_stats(user_id: int):
         "daily_reward_last_claimed": None,
         "daily_reward_lines": 0,
         "referral_bonus_lines": 0,
-        "base_plan_limit": 15,
+        "base_plan_limit": 10,
         "is_banned": False,
         "created_at": datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat()
