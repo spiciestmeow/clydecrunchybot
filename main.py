@@ -245,7 +245,8 @@ def get_plan_with_emoji(plan_key: str) -> str:
         "FREE": "🆓",
         "BASIC": "⭐",
         "VIP": "👑",
-        "YEARLY": "🌟"
+        "YEARLY": "🌟",
+        "OWNER": "🔱"
     }
     emoji = emojis.get(plan_key, "📌")
     config = PLAN_CONFIG.get(plan_key, PLAN_CONFIG["FREE"])
@@ -292,6 +293,13 @@ PLAN_CONFIG = {
         "daily_limit": None,          # Unlimited
         "max_threads": 40,
         "multi_scan_max_files": 5,
+        "queue_waiting": False
+    },
+    "OWNER": {
+        "display_name": "OWNER",
+        "daily_limit": None,
+        "max_threads": 50,
+        "multi_scan_max_files": 999,
         "queue_waiting": False
     }
 }
@@ -577,6 +585,11 @@ def update_user_stats(user_id: int, data: dict):
 
 def reset_daily_if_needed(stats: dict, user_id: int):
     """Automatically reset daily scans AND daily files at 00:00 Philippine Time"""
+    plan = stats.get("plan", "FREE").upper()
+    
+    if plan == "OWNER":
+        return
+
     today_ph = datetime.now(PH_TZ).date()
     today_str = str(today_ph)
     
@@ -1011,6 +1024,11 @@ async def set_plan_command(update: Update, context: CallbackContext):
 
     if new_plan not in ["FREE", "BASIC", "VIP", "YEARLY"]:
         await update.message.reply_text("❌ Invalid plan! Use: FREE, BASIC, or VIP")
+        return
+    
+    # ← ADD THIS after plan validation
+    if new_plan == "OWNER" and user_id != ADMIN_ID:
+        await update.message.reply_text("❌ OWNER plan is restricted to owner only!")
         return
 
     # ←←← FIXED: Always calculate fresh expiry date here
