@@ -329,6 +329,12 @@ PLAN_DEFAULTS = {
         "base_plan_limit": 999999,
         "threads": 40,
         "expires": (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
+    },
+    "OWNER": {
+        "plan": "OWNER",
+        "base_plan_limit": 999999,
+        "threads": 50,
+        "expires": "N/A"
     }
 }
 
@@ -1023,7 +1029,7 @@ async def set_plan_command(update: Update, context: CallbackContext):
         return
 
     if new_plan not in ["FREE", "BASIC", "VIP", "YEARLY", "OWNER"]:
-        await update.message.reply_text("❌ Invalid plan! Use: FREE, BASIC, or VIP")
+        await update.message.reply_text("❌ Invalid plan! Use: FREE, BASIC, VIP, YEARLY, or OWNER")
         return
     
     if new_plan == "OWNER" and target_user_id != ADMIN_ID:
