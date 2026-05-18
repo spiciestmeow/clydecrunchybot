@@ -1022,11 +1022,10 @@ async def set_plan_command(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Wrong usage. Check /setplan for help.")
         return
 
-    if new_plan not in ["FREE", "BASIC", "VIP", "YEARLY"]:
+    if new_plan not in ["FREE", "BASIC", "VIP", "YEARLY", "OWNER"]:
         await update.message.reply_text("❌ Invalid plan! Use: FREE, BASIC, or VIP")
         return
     
-    # ← OWNER restriction (use target_user_id, not user_id)
     if new_plan == "OWNER" and target_user_id != ADMIN_ID:
         await update.message.reply_text("❌ OWNER plan can only be set for the bot owner!")
         return
