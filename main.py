@@ -2296,7 +2296,11 @@ async def handle_document(update: Update, context: CallbackContext):
         return
     
     if not document.file_name.endswith('.txt'):
-        await update.message.reply_text("❌ Please send a .txt file only!", parse_mode='HTML')
+        await update.message.reply_text(
+            "❌ Please send a .txt file only!", 
+            parse_mode='HTML',
+            reply_to_message_id=update.message.message_id
+        )
         return
     
     user_id = update.effective_user.id
@@ -2310,7 +2314,8 @@ async def handle_document(update: Update, context: CallbackContext):
             f"❌ <b>FREE Plan limitation</b>\n\n"
             f"Bulk file upload is not available on FREE plan.\n"
             f"Please use single checks (<code>email:password</code>) or upgrade to BASIC/VIP.",
-            parse_mode='HTML'
+            parse_mode='HTML',
+            reply_to_message_id=update.message.message_id
         )
         return
     # =====================================================================
@@ -2325,7 +2330,8 @@ async def handle_document(update: Update, context: CallbackContext):
             f"❌ <b>Daily file limit reached!</b>\n\n"
             f"Your <b>{limits['display_name']}</b> plan allows only <b>{max_files}</b> file{'' if max_files == 1 else 's'} per day.\n\n"
             f"Come back tomorrow or upgrade your plan.",
-            parse_mode='HTML'
+            parse_mode='HTML',
+            reply_to_message_id=update.message.message_id
         )
         return
     
@@ -2342,7 +2348,11 @@ async def handle_document(update: Update, context: CallbackContext):
             accounts.append((email.strip(), pwd.strip()))
     
     if not accounts:
-        await update.message.reply_text("❌ No valid accounts found!", parse_mode='HTML')
+        await update.message.reply_text(
+            "❌ No valid accounts found!", 
+            parse_mode='HTML',
+            reply_to_message_id=update.message.message_id
+        )
         return
 
     total = len(accounts)
@@ -2353,11 +2363,9 @@ async def handle_document(update: Update, context: CallbackContext):
         remaining = limits["daily_limit"] - used
         if total > remaining:
             await update.message.reply_text(
-                f"❌ <b>Not enough scans left today!</b>\n\n"
-                f"• You have <b>{remaining}</b> scans remaining\n"
-                f"• This file contains <b>{total}</b> accounts\n\n"
-                f"Please send a smaller file (maximum <b>{remaining}</b> combos) or wait until tomorrow.",
-                parse_mode='HTML'
+                f"❌ <b>Error!</b> Maximum allowed combos per day for your plan is <code>{remaining}</code>. Your file contains <code>{total}</code> combos.",
+                parse_mode='HTML',
+                reply_to_message_id=update.message.message_id
             )
             return
 
