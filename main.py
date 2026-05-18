@@ -2418,6 +2418,8 @@ async def handle_document(update: Update, context: CallbackContext):
     )
     context.user_data['current_scan']['progress_msg'] = progress_msg
 
+    set_scan_status(scan_id, "running")
+
     # ====================== Start scanning ======================
     hits = []
     start_time = time.time()
@@ -2506,13 +2508,6 @@ async def handle_document(update: Update, context: CallbackContext):
     completed = 0
 
     loop = asyncio.get_running_loop()
-
-    set_scan_status(scan_id, "running")
-    context.user_data['current_scan'] = {
-        'scan_id': scan_id,
-        'progress_msg': None,
-        'stop_requested': False
-    }
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=user_threads) as executor:
         futures = [
