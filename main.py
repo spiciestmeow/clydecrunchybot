@@ -268,7 +268,7 @@ def get_checker_function(api_mode: str, user_id: int = None):
 PLAN_CONFIG = {
     "FREE": {
         "display_name": "FREE",
-        "daily_limit": 10,
+        "daily_limit": 25,
         "max_threads": 8,
         "multi_scan_max_files": 0,
         "queue_waiting": True
@@ -300,7 +300,7 @@ PLAN_CONFIG = {
 PLAN_DEFAULTS = {
     "FREE": {
         "plan": "FREE",
-        "base_plan_limit": 10,
+        "base_plan_limit": 25, 
         "threads": 8,
         "expires": "N/A"
     },
@@ -562,7 +562,7 @@ def get_user_stats(user_id: int):
         "daily_reward_last_claimed": None,
         "daily_reward_lines": 0,
         "referral_bonus_lines": 0,
-        "base_plan_limit": 10,
+        "base_plan_limit": 25,
         "is_banned": False,
         "created_at": datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat()
@@ -691,7 +691,7 @@ async def show_rewards_menu(query, context):
 Claim your daily free combos or redeem premium gift codes provided by the admin.
 
 📊 <b>Possible Rewards:</b>
-• <b>FREE:</b> mostly 3-8 combos (very rare up to <tg-spoiler>60</tg-spoiler>)
+• <b>FREE:</b> mostly 5-15 combos (very rare up to <tg-spoiler>60</tg-spoiler>)
 • <b>BASIC:</b> mostly 15-35 combos (very rare up to <tg-spoiler>200</tg-spoiler>)
 • <b>VIP / YEARLY:</b> mostly 60-130 combos (very rare up to <tg-spoiler>750</tg-spoiler>)
 ━━━━━━━━━━━━━━━━━━━━━━━━
@@ -728,11 +728,11 @@ async def claim_daily_reward(query, context):
 
     # === VERY HARD LOTTERY (0.5% jackpot) ===
     if plan == "FREE":
-        # 89% tiny | 10% decent | 1% jackpot
+        # 85% small | 12% decent | 3% jackpot (better odds now)
         rewards = (
-            [random.randint(3, 8)] * 178 +
-            [random.randint(10, 20)] * 20 +
-            [random.randint(30, 60)] * 2
+            [random.randint(5, 15)] * 170 +  
+            [random.randint(20, 35)] * 24 + 
+            [random.randint(50, 100)] * 6
         )
     elif plan == "BASIC":
         # 75% small | 23% good | 2% big
@@ -818,7 +818,7 @@ async def show_membership_menu(query, context):
 👑 <b>MEMBERSHIP PLANS</b>
 ━━━━━━━━━━━━━━━━━━━━━━━
 🆓 <b>FREE PLAN</b>
-• Daily Limit: <b>10 combos/day</b>
+• Daily Limit: <b>25 combos/day</b>
 • Max Threads: <b>1-8</b>
 • Single checks only (no .txt files)
 • <b>Basic Hit Details</b> only
