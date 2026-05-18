@@ -2911,22 +2911,23 @@ async def button_callback(update: Update, context: CallbackContext):
         new_mode = data.split(":", 1)[1]
         user_id = query.from_user.id
         
-    # === VIP-ONLY PROTECTION FOR VIVAMAX ===
-    if new_mode == "Vivamax" and user_id != ADMIN_ID:
-        stats = get_user_stats(user_id)
-        user_plan = stats.get("plan", "FREE").upper()
-        
-        if user_plan not in ["VIP", "YEARLY"]:
-            await query.answer("", show_alert=False)  # dismiss silently
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text=(
-                    "🔒 <b>Vivamax Mode</b> is restricted to <b>VIP members only!</b>\n\n"
-                    f"<code>@{query.from_user.username or query.from_user.first_name}</code> | /membership"
-                ),
-                parse_mode='HTML'
-            )
-            return
+        # === VIP-ONLY PROTECTION FOR VIVAMAX ===
+        if new_mode == "Vivamax" and user_id != ADMIN_ID:
+            stats = get_user_stats(user_id)
+            user_plan = stats.get("plan", "FREE").upper()
+            
+            if user_plan not in ["VIP", "YEARLY"]:
+                await query.answer("", show_alert=False)
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=(
+                        "🔒 <b>Vivamax Mode</b> is restricted to <b>VIP</b> members only!\n\n"
+                        f"<code>@{query.from_user.username}</code>"
+                    ),
+                    parse_mode='HTML',
+                    disable_web_page_preview=False
+                )
+                return
 
         stats = get_user_stats(user_id)
         current_mode = stats.get("api_mode", "Crunchyroll")
@@ -2935,9 +2936,7 @@ async def button_callback(update: Update, context: CallbackContext):
             await query.answer("ℹ️ Already in this mode", show_alert=False)
             return
 
-        # Update BOTH columns in database
         update_user_stats(user_id, {"api_mode": new_mode})
-
         await query.answer(f"✅ Switched to {new_mode} Mode!", show_alert=False)
         await show_api_mode_menu(query, context)
     
