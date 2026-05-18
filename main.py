@@ -2573,6 +2573,19 @@ async def handle_document(update: Update, context: CallbackContext):
                 percent = int((completed / total) * 100)
                 bad_so_far = completed - len(hits)
 
+                context.user_data['current_scan']['last_progress'] = {
+                    'file_name': document.file_name,
+                    'completed': completed,
+                    'total': total,
+                    'hits': len(hits),
+                    'bad': bad_so_far,
+                    'elapsed_sec': elapsed_sec,
+                    'cpm': cpm,
+                    'percent': percent,
+                    'threads': user_threads,
+                    'mode': get_mode_display(stats.get('api_mode'))
+                }
+
                 current_status = get_scan_status(scan_id)
                 if current_status == "paused":
                     status_title = "⏸️ <b>PAUSED</b> — Auto-stops in 10 min"
@@ -2929,29 +2942,63 @@ async def button_callback(update: Update, context: CallbackContext):
         scan_id = data.split(":", 1)[1]
         current_status = get_scan_status(scan_id)
         
-        # Toggle: paused → running, running → paused
         new_status = "running" if current_status == "paused" else "paused"
         set_scan_status(scan_id, new_status)
-        
-        # ← CRITICAL: Update keyboard ONLY (don't touch message text to avoid stale data)
+
         progress_msg = context.user_data.get('current_scan', {}).get('progress_msg')
-        if progress_msg:
+        last = context.user_data.get('current_scan', {}).get('last_progress', {})
+
+        if progress_msg and last:
             try:
-                # Just update the keyboard immediately — let progress loop handle text updates
-                keyboard = [[
-                    InlineKeyboardButton(
-                        "▶️ Resume" if new_status == "paused" else "⏸️ Pause",
-                        callback_data=f"resume_scan:{scan_id}" if new_status == "paused" else f"pause_scan:{scan_id}"
-                    ),
-                    InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
-                ]]
+                if new_status == "paused":
+                    status_title = "⏸️ <b>PAUSED</b> — Auto-stops in 10 min"
+                    keyboard = [[
+                        InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
+                        InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
+                    ]]
+                else:
+                    status_title = "📊 <b>Scan In Progress</b> 🔄"
+                    keyboard = [[
+                        InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
+                        InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
+                    ]]
+
                 reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await progress_msg.edit_reply_markup(reply_markup=reply_markup)
-                await query.answer(f"{'▶️ Resumed' if new_status == 'running' else '⏸️ Paused'}", show_alert=False)
+
+                await progress_msg.edit_text(
+                    f"{status_title}\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📁 File: <code>{last['file_name']}</code>\n"
+                    f"🔢 <b>Processed:</b> <code>{last['completed']}/{last['total']}</code> (<code>{last['percent']}%</code>)\n"
+                    f"🧵 <b>Threads:</b> <code>{last['threads']}</code>\n"
+                    f"📡 <b>Mode:</b> <code>{last['mode']}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"✅ <b>Hits:</b> <code>{last['hits']}</code>\n"
+                    f"❌ Bad: <code>{last['bad']}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"⏱ <b>Elapsed:</b> <code>{last['elapsed_sec']//60:02d}m {last['elapsed_sec']%60:02d}s</code>\n"
+                    f"⚡ <b>CPM:</b> <code>{last['cpm']}</code>\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"— Controls:\n"
+                    f"Pause\n"
+                    f"Resume\n"
+                    f"Stop and send results\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━━━",
+                    parse_mode='HTML',
+                    reply_markup=reply_markup
+                )
+                await query.answer(
+                    "⏸️ Paused" if new_status == "paused" else "▶️ Resumed",
+                    show_alert=False
+                )
             except Exception as e:
-                print(f"⚠️ Failed to update keyboard: {e}")
-                await query.answer("⚠️ Button update failed", show_alert=True)
+                print(f"⚠️ Pause/Resume edit failed: {e}")
+                await query.answer("⚠️ Update failed", show_alert=True)
+        else:
+            await query.answer(
+                "⏸️ Paused" if new_status == "paused" else "▶️ Resumed",
+                show_alert=False
+            )
         return
 
     elif data.startswith("stop_scan:"):
