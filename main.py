@@ -2922,7 +2922,7 @@ async def button_callback(update: Update, context: CallbackContext):
                     chat_id=query.message.chat_id,
                     text=(
                         "🔒 <b>Vivamax Mode</b> is restricted to <b>VIP</b> members only!\n\n"
-                        f"<code>@{query.from_user.username}</code>"
+                        f"<a href="https://t.me/caydigitals">@caydigitals</a>"
                     ),
                     parse_mode='HTML',
                     disable_web_page_preview=False
