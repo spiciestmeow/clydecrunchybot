@@ -2540,55 +2540,55 @@ async def handle_document(update: Update, context: CallbackContext):
             for acc in accounts
         ]
         
+        # REPLACE your entire for coro loop with this:
         for coro in asyncio.as_completed(futures):
+            # Check stop
             scan_status = get_scan_status(scan_id)
             if scan_status == "stopped":
                 break
 
-            # When paused, hold the main loop too (stops progress updates)
-            pause_start_main = time.time()
-            while scan_status == "paused":
-                await asyncio.sleep(0.5)
+            result = await coro
+            
+            # ← THE ACTUAL FIX: wait here if paused before counting this result
+            while True:
                 scan_status = get_scan_status(scan_id)
+                if scan_status == "running":
+                    break
                 if scan_status == "stopped":
                     break
-                # Auto-stop after 10 minutes of being paused
-                if time.time() - pause_start_main > 600:
-                    set_scan_status(scan_id, "stopped")
-                    break
-
+                await asyncio.sleep(0.5)
+            
             if scan_status == "stopped":
                 break
 
-            result = await coro  # ← await lets other callbacks run between results
             completed += 1
-            
+
             if result and result.get('success'):
                 hits.append(result)
-            
-            # Update progress every 10 accounts (or at the end) → fixes "Query too old" error
+
             if completed % 5 == 0 or completed == total:
                 elapsed_sec = int(time.time() - start_time)
                 cpm = int((completed / elapsed_sec) * 60) if elapsed_sec > 0 else 0
                 percent = int((completed / total) * 100)
                 bad_so_far = completed - len(hits)
 
-                context.user_data['current_scan']['last_progress'] = {
-                    'file_name': document.file_name,
-                    'completed': completed,
-                    'total': total,
-                    'hits': len(hits),
-                    'bad': bad_so_far,
-                    'elapsed_sec': elapsed_sec,
-                    'cpm': cpm,
-                    'percent': percent,
-                    'threads': user_threads,
-                    'mode': get_mode_display(stats.get('api_mode'))
-                }
+                if 'current_scan' in context.user_data and context.user_data['current_scan'].get('scan_id') == scan_id:
+                    context.user_data['current_scan']['last_progress'] = {
+                        'file_name': document.file_name,
+                        'completed': completed,
+                        'total': total,
+                        'hits': len(hits),
+                        'bad': bad_so_far,
+                        'elapsed_sec': elapsed_sec,
+                        'cpm': cpm,
+                        'percent': percent,
+                        'threads': user_threads,
+                        'mode': get_mode_display(stats.get('api_mode'))
+                    }
 
                 current_status = get_scan_status(scan_id)
                 if current_status == "paused":
-                    status_title = "📊 <b>Scan Paused</b> ⏸️ (Auto-resume in 30s)"
+                    status_title = "📊 <b>Scan Paused</b> ⏸️"
                     keyboard = [[
                         InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
                         InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
@@ -2626,7 +2626,7 @@ async def handle_document(update: Update, context: CallbackContext):
                         reply_markup=reply_markup
                     )
                 except:
-                    pass  # Telegram rate limit or message deleted
+                    pass
 
     # ====================== CLEANUP & FINISH ======================
     final_status = get_scan_status(scan_id)
