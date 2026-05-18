@@ -2073,8 +2073,8 @@ async def start(update: Update, context: CallbackContext):
 📁 Files Today: <code><b>{files_display}</b></code>
 👑 Plan: <code><b>{get_plan_with_emoji(stats.get('plan'))}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
-📈 Daily Limit: <code><b>{limits['remaining_text']}</b></code>
-📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
+📈 Daily Limit: <code><b>{limits['remaining_text']} combos</b></code>
+📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))}</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
@@ -2798,7 +2798,7 @@ async def edit_to_main_menu(update_or_query, context):
 👑 Plan: <code><b>{get_plan_with_emoji(stats.get('plan'))}</b></code>
 📅 Days Left: <code><b>{get_days_remaining(stats['expires'])}</b></code>
 📈 Daily Limit: <code><b>{limits['remaining_text']} combos</b></code>
-📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))} Check</b></code>
+📡 Mode: <code><b>{get_mode_display(stats.get('api_mode'))}</b></code>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 <b>👇 Select an option from the menu below:</b>
 """
