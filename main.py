@@ -2468,11 +2468,15 @@ async def handle_document(update: Update, context: CallbackContext):
             return None
 
         # Wait while paused AGAIN (in case paused during rate limiter wait)
+        pause_start = time.time()
         while True:
             status = get_scan_status(scan_id)
             if status == "running":
                 break
             if status == "stopped":
+                return None
+            if time.time() - pause_start > 600:  # ✅ ADD THIS
+                set_scan_status(scan_id, "stopped")
                 return None
             time.sleep(0.3)
 
@@ -2485,11 +2489,15 @@ async def handle_document(update: Update, context: CallbackContext):
             return None
 
         # Wait while paused AFTER result (before returning to queue)
+        pause_start = time.time()
         while True:
             status = get_scan_status(scan_id)
             if status == "running":
                 break
             if status == "stopped":
+                return None
+            if time.time() - pause_start > 600:  # ✅ ADD THIS
+                set_scan_status(scan_id, "stopped")
                 return None
             time.sleep(0.3)
 
@@ -2547,7 +2555,7 @@ async def handle_document(update: Update, context: CallbackContext):
 
                 current_status = get_scan_status(scan_id)
                 if current_status == "paused":
-                    status_title = "⏸️ <b>PAUSED</b> — Auto-stops in 10 min if not resumed"
+                    status_title = "⏸️ <b>PAUSED</b> — Auto-stops in 10 min"
                 else:
                     status_title = "📊 <b>Scan In Progress</b> 🔄"
 
@@ -2916,11 +2924,11 @@ async def button_callback(update: Update, context: CallbackContext):
                 if new_status == "paused":
                     msg_text = msg_text.replace(
                         "📊 <b>Scan In Progress</b> 🔄",
-                        "⏸️ <b>PAUSED</b> — Auto-resumes in 10 sec"
+                        "⏸️ <b>PAUSED</b> — Auto-stops in 10 min" 
                     )
                 else:
                     msg_text = msg_text.replace(
-                        "⏸️ <b>PAUSED</b> — Auto-resumes in 10 sec",
+                        "⏸️ <b>PAUSED</b> — Auto-stops in 10 min",
                         "📊 <b>Scan In Progress</b> 🔄"
                     )
                 
