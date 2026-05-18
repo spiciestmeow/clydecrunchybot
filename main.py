@@ -1045,6 +1045,8 @@ async def set_plan_command(update: Update, context: CallbackContext):
         expires = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
     elif new_plan == "YEARLY":
         expires = (datetime.now() + timedelta(days=365)).strftime("%Y-%m-%d")
+    elif new_plan == "OWNER":
+        expires = "N/A"
 
     defaults = PLAN_DEFAULTS[new_plan]
 
