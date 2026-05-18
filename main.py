@@ -761,12 +761,14 @@ async def claim_daily_reward(query, context):
         time_str = now_ph.strftime("%Y-%m-%d %I:%M %p")
         
         username_display = f"@{stats.get('username')}" if stats.get('username') else "No username"
+        user_plan = stats.get('plan', 'FREE').upper()
         
         admin_msg = f"""
 🎁 <b>Daily Reward Claimed!</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━
 🆔 <b>User ID:</b> <code>{user_id}</code>
 👤 <b>Username:</b> {username_display}
+👑 <b>Plan:</b> {get_plan_with_emoji(user_plan)}
 🎟️ <b>Reward:</b> +{reward_amount} combos
 ⏰ <b>Time:</b> {time_str} (PH time)
         """.strip()
