@@ -2551,17 +2551,17 @@ async def handle_document(update: Update, context: CallbackContext):
                 current_status = get_scan_status(scan_id)
                 if current_status == "paused":
                     status_title = "⏸️ <b>PAUSED</b> — Auto-stops in 10 min"
-                else:
-                    status_title = "📊 <b>Scan In Progress</b> 🔄"
-
-                # Rebuild keyboard every update (keeps 3 buttons alive)
-                keyboard = [
-                    [
-                        InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
+                    keyboard = [[
                         InlineKeyboardButton("▶️ Resume", callback_data=f"resume_scan:{scan_id}"),
                         InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
-                    ]
-                ]
+                    ]]
+                else:
+                    status_title = "📊 <b>Scan In Progress</b> 🔄"
+                    keyboard = [[
+                        InlineKeyboardButton("⏸️ Pause", callback_data=f"pause_scan:{scan_id}"),
+                        InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
+                    ]]
+
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
                 try:
@@ -2931,7 +2931,7 @@ async def button_callback(update: Update, context: CallbackContext):
                 keyboard = [[
                     InlineKeyboardButton(
                         "▶️ Resume" if new_status == "paused" else "⏸️ Pause",
-                        callback_data=f"pause_scan:{scan_id}" if new_status == "paused" else f"resume_scan:{scan_id}"
+                        callback_data=f"resume_scan:{scan_id}" if new_status == "paused" else f"pause_scan:{scan_id}"  # ✅
                     ),
                     InlineKeyboardButton("⏹️ Stop", callback_data=f"stop_scan:{scan_id}")
                 ]]
