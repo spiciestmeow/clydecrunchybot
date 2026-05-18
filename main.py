@@ -814,14 +814,14 @@ async def show_membership_menu(query, context):
 👑 <b>MEMBERSHIP PLANS</b>
 ━━━━━━━━━━━━━━━━━━━━━━━
 🆓 <b>FREE PLAN</b>
-• Daily Limit: <b>15 combos/day</b>
+• Daily Limit: <b>10 combos/day</b>
 • Max Threads: <b>1-8</b>
 • Single checks only (no .txt files)
 • <b>Basic Hit Details</b> only
 ━━━━━━━━━━━━━━━━━━━━━━━
 ⭐ <b>BASIC PLAN (WEEKLY)</b>
 • Duration: <b>7 Days</b>
-• Daily Limit: <b>100 combos/day</b>
+• Daily Limit: <b>150 combos/day</b>
 • Max Threads: <b>1-25</b>
 • Multi-Scan: <b>Up to 3 files/day</b>
 • <b>Medium Hit Details</b>
