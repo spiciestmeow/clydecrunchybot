@@ -1026,9 +1026,9 @@ async def set_plan_command(update: Update, context: CallbackContext):
         await update.message.reply_text("❌ Invalid plan! Use: FREE, BASIC, or VIP")
         return
     
-    # ← ADD THIS after plan validation
-    if new_plan == "OWNER" and user_id != ADMIN_ID:
-        await update.message.reply_text("❌ OWNER plan is restricted to owner only!")
+    # ← OWNER restriction (use target_user_id, not user_id)
+    if new_plan == "OWNER" and target_user_id != ADMIN_ID:
+        await update.message.reply_text("❌ OWNER plan can only be set for the bot owner!")
         return
 
     # ←←← FIXED: Always calculate fresh expiry date here
